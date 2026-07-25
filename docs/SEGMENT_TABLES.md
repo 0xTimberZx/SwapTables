@@ -4,7 +4,7 @@ Status: **DESIGN (pre-implementation)**. Prototype: the interactive board artifa
 (load six tokens → approve placements → live table → pari-mutuel settlement). No contract
 written yet; this doc is the spec of record for `SegmentBoard` (working name).
 
-Locked dials: `TABLE_SEED = 100 TIMBS`, `RAKE_BASE = 5%`, `RAKE_FLOOR = 1.5%`,
+Locked dials: `TABLE_SEED = 100 TIMBS`, `RAKE_BASE = 8%`, `RAKE_FLOOR = 1.75%`,
 `TABLES_MAX = 40` (expect 2–4 live), tokens **per-table**, retire **at six locks**,
 payouts **push (auto-credit)**, swap nudge **velocity/entropy only**.
 
@@ -177,7 +177,7 @@ edge** — a forced-diversification / anti-concentration property:
 Counter-intuitively, the diversification this forces tends to **lower** the house's realised
 take, not raise it: because every seated player loads and places a token in **every** segment,
 the six segment pools run **crowded** (high distinct-wallet `n`), which drives graduated rake
-toward its **1.5% floor** (§8) and — via broad coverage — makes no-winner sweeps rarer. Cheap
+toward its **1.75% floor** (§8) and — via broad coverage — makes no-winner sweeps rarer. Cheap
 for honest crowds, hostile to concentration and seed-farming: a good combination, but not a
 house edge.
 
@@ -203,27 +203,35 @@ house edge.
 
 ```
 rake(n) = RAKE_FLOOR + (RAKE_BASE − RAKE_FLOOR) / n      // n = distinct wallets in pool
-RAKE_BASE = 5%   RAKE_FLOOR = 1.5%
+RAKE_BASE = 8%   RAKE_FLOOR = 1.75%
 ```
 
 | Wallets | Rake |
 |---|---|
-| 1 (solo) | 5.00% |
-| 2 | 3.25% |
-| 3 | 2.67% |
-| 4 | 2.38% |
-| 8 | 1.94% |
-| → ∞ | 1.50% (floor) |
+| 1 (solo) | 8.00% |
+| 2 | 4.88% |
+| 3 | 3.83% |
+| 4 | 3.31% |
+| 8 | 2.53% |
+| → ∞ | 1.75% (floor) |
 
-- **Solo pays the top rate**, so a lone farmer's edge off the seed is taxed hardest — mild
+> **Why the curve moved up (from 5% / 1.5%).** Once the seed is *held until enough distinct
+> wallets are seated* (§9.1, §11), the house is carrying more coordination cost and the thin-pool
+> subsidy is more valuable, so the whole curve is bumped: solo now pays **8%** and the floor is
+> **1.75%**. Note the graduated formula still applies — **two wallets pay 4.88%**, not 8% (only a
+> solo pool pays the full base). If the intent is for small pools to bite harder still (e.g. ~8%
+> at two wallets), that needs a steeper curve than `FLOOR + (BASE−FLOOR)/n` — flag it and we'll
+> reshape the function.
+
+- **Solo pays the top rate** (8%), so a lone farmer's edge off the seed is taxed hardest — real
   friction on solo without forbidding it.
 - **Busy pools are cheaper** → the incentive is always "find the crowded table," which is
   what makes the live tables feel alive.
-- Never exceeds `RAKE_BASE` (matches "start at 5%, scale down for more players").
+- Never exceeds `RAKE_BASE` (matches "start high, scale down for more players").
 - **Count distinct wallets, not bets** — otherwise one wallet splits into six bets to fake a
   crowd and buy itself a discount. The active-ticket gate puts a real cost behind each extra
   wallet, so this holds.
-- Rake applies to the **whole pool, seed included** → the house quietly recoups 1.5–5% of its
+- Rake applies to the **whole pool, seed included** → the house quietly recoups 1.75–8% of its
   own seed on every settled pool; a no-winner pool returns 100% to Treasury regardless.
 
 ---
@@ -243,7 +251,7 @@ RAKE_BASE = 5%   RAKE_FLOOR = 1.5%
   carry a quiet game week), never inside a pool — so the game can never insolvency-spiral or
   over-promise: it only ever pays out what is in the pool.
 - **Farming ceiling:** with graduated rake, the most a solo actor can bleed from a table ≈ one
-  seed, taxed at 5%, and only on a win. Turning the rake dial up further neutralizes it.
+  seed, taxed at 8% (solo), and only on a win. Turning the rake dial up further neutralizes it.
 
 *Open sizing note:* 100 TIMBS is a chip-economics default. To size as a % of runway instead,
 we need the Treasury balance + TIMBS pool price (target ≈ 40×seed ≤ a few % of Treasury).
@@ -276,6 +284,34 @@ What we rely on instead — all soft/structural, none timing-dependent:
 - **Transparency over caps** — surface live per-pool totals and the current implied per-chip
   return so the crowd rebalances itself; that is the pari-mutuel-native "limit."
 
+### 9.2 Seating, eligibility & the inactive-ticket path
+
+- **Seating.** A seat requires an active Compete ticket, and a wallet may sit at **multiple
+  tables at once** — each seat issues its own six per-table tokens. The bound is a
+  *tables-per-wallet* cap (§11), not one-table-only.
+- **Eligibility is continuous.** A seat is valid only while its ticket is active. The moment the
+  ticket goes inactive/ineligible (expired, consumed, revoked, …) the wallet can no longer
+  **load or place** new chips at any seat.
+- **UI freezes; the contract is the authority.** On detecting inactivity the page **freezes in
+  place** (no new loads/placements) until the wallet holds an active ticket again. But the freeze
+  is a safety on *input only* — settlement is on-chain and must resolve deterministically **with
+  the UI closed** (the player can shut the tab). Never make a payout or a return depend on the
+  page being open.
+- **What happens to that wallet's money — the finality split** (this refines "sweep their
+  positions"; do **not** claw placed bets back):
+  - **Placed (approved) bets stay in their pools and settle normally.** They are final by the
+    core rule, and — critically — every other player's pari-mutuel payout is computed against that
+    money; removing it would break pool conservation for the whole pool. Winnings **push-pay to
+    the wallet** on each segment lock regardless of ticket status (they were earned before the
+    lapse).
+  - **Unplaced loaded chips are returned to the wallet** — exactly the retire-at-six dislodge.
+    They never entered a pool, so the return is clean.
+  - **The inactive better still counts as a distinct wallet** for its pools' rake (§8): it was a
+    real participant, and dropping it would retroactively change everyone else's payout.
+- **"Sweep on re-entry" is a UI reconciliation, not the settlement.** By the time the wallet
+  re-qualifies, the lapsed round has already resolved on-chain (returns + push-paid winnings);
+  re-entry just re-syncs the frozen page and reopens play. Nothing is stranded waiting on it.
+
 ---
 
 ## 10. Invariants / test checklist (for when this is built)
@@ -290,6 +326,10 @@ What we rely on instead — all soft/structural, none timing-dependent:
 - [ ] Retire at sixth lock: unplayed dislodged, leftovers → Treasury, new table opened.
 - [ ] 40 parallel tables × 7 pools settle via lazy/permissionless calls (no unbounded
       push-to-all-winners loop that can run out of gas).
+- [ ] An inactive/ineligible ticket blocks new loads/placements but never claws back an
+      already-placed bet — finality and pool conservation for co-bettors both hold.
+- [ ] Every return and push-paid winning for an inactive better resolves on-chain with no UI
+      action; a reverting recipient falls back to a pull-claim rather than bricking settlement.
 
 ---
 
@@ -307,3 +347,16 @@ What we rely on instead — all soft/structural, none timing-dependent:
   pool's seed share with distinct-wallet count*. Preferred over any bet cap.
 - **Seating / eligibility bounds** — players-per-table (currently ~4) and **tables-per-wallet per
   round**; these bound pool size and cross-table seed-farming far better than per-area limits.
+- **Players-per-table safe band.** *Lower* bound = the seed-release minimum (§9.1 guard). *Upper*
+  bound is set by pari-mutuel legibility and **per-lock settlement gas**, not by "the chain" in the
+  abstract: each segment lock settles one pool, and any push-pay must loop over that pool's winners
+  within block gas. On Arbitrum a few dozen winners/pool is trivially cheap, so small tables are far
+  from the limit — the architecture deliberately favors **many parallel small tables (≤~40)** over a
+  few large ones. Pick the band (candidate: **min 2–3** distinct wallets to release the seed, **soft
+  max ~8–12** for legibility) and confirm the per-lock gas envelope on the target chain.
+- **Push vs. pull payout.** Retire-at-six needs push-pay (nothing claimable later), but a push to a
+  contract recipient that reverts could brick a whole pool's settlement. Need a **pull-claim
+  fallback** (credit an in-contract balance if the push fails) so one griefing recipient can't DoS
+  the table.
+- **L2 finality for real-time pay** — how many confirmations before a segment lock's push-pay is
+  treated as final (reorg safety vs. the "instant settlement" feel).

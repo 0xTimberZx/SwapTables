@@ -47,8 +47,8 @@ live in [`docs/SEGMENT_TABLES.md`](docs/SEGMENT_TABLES.md).
 | Dial | Value | Notes |
 |---|---|---|
 | `TABLE_SEED` | 100 TIMBS | seven-way split; the only house money at risk; boot condition |
-| `RAKE_BASE` | 5% | rake for a solo pool |
-| `RAKE_FLOOR` | 1.5% | `rake(n) = FLOOR + (BASE − FLOOR)/n`, n = distinct wallets in pool |
+| `RAKE_BASE` | 8% | rake for a solo pool |
+| `RAKE_FLOOR` | 1.75% | `rake(n) = FLOOR + (BASE − FLOOR)/n`, n = distinct wallets in pool (2 wallets → 4.88%) |
 | `TABLES_MAX` | 40 | expect 2–4 live |
 | tokens | per-table | six issued each time you sit down |
 | payouts | push | auto-credit on each segment lock (retire-at-six leaves nothing to claim) |
