@@ -125,7 +125,7 @@
     border-radius:14px;padding:20px;border:3px solid var(--gold-dim);
     box-shadow:0 0 0 10px var(--wood),0 0 0 12px #14100a,0 24px 56px -18px rgba(0,0,0,.8),inset 0 0 90px rgba(0,0,0,.35);
   }
-  .board{display:grid;grid-template-columns:1.25fr repeat(12,1fr) 1.15fr;grid-template-rows:repeat(3,54px) 42px 46px 46px;gap:5px}
+  .board{display:grid;grid-template-columns:1.25fr repeat(12,1fr) 1.15fr;grid-template-rows:repeat(3,54px) 42px 46px 46px 46px;gap:5px}
   .cell{display:flex;align-items:center;justify-content:center;border:1px solid var(--felt-line);border-radius:4px;color:var(--cream);user-select:none;position:relative;text-align:center}
   .bet{cursor:pointer;-webkit-tap-highlight-color:transparent;transition:box-shadow .12s ease, filter .12s ease, transform .1s ease}
   .bet:hover{filter:brightness(1.12);box-shadow:0 0 0 1px var(--gold) inset;z-index:3}
@@ -159,6 +159,20 @@
   .bet.redbet .lab{color:#ef9aa1}
   .bet.blackbet{border-color:#50535c}
   .bet.blackbet .lab{color:#d6dfd8}
+  .bet.letterbet{border-color:#4c8fbf}
+  .bet.letterbet .lab{color:#a9d3ee}
+  .bet.numberbet{border-color:#c08a3a}
+  .bet.numberbet .lab{color:#eccf96}
+
+  /* pockets belonging to the region a Letter/Number bet is being hovered over */
+  .pocket.rgn{box-shadow:0 0 0 2px var(--gold) inset,0 0 16px -2px rgba(215,179,76,.75);z-index:2}
+
+  /* connector lines pointing each new outside bet at the pockets it covers */
+  #rgnlines{position:absolute;inset:0;pointer-events:none;z-index:5;overflow:visible}
+  #rgnlines path{fill:none;stroke-width:2;stroke-dasharray:5 4;opacity:.9}
+  #rgnlines .let{stroke:#7bb8e0} #rgnlines .num{stroke:#e0b264}
+  #rgnlines .tag{font:700 10px "Arial Narrow",Arial,sans-serif;letter-spacing:.06em}
+  #rgnlines .tag.let{fill:#a9d3ee} #rgnlines .tag.num{fill:#eccf96}
 
   /* placed coins on a spot */
   .coins{position:absolute;top:-7px;right:-7px;display:flex;flex-direction:row-reverse;pointer-events:none}
@@ -250,7 +264,7 @@
 </style>
 
 <div class="wrap">
-  <p class="eyebrow">TimbSwap · pre-round segment betting</p>
+  <p class="eyebrow">SwapTables · pre-round segment betting</p>
   <h1>Load all six <em>tokens</em>, then play.</h1>
   <p class="lede">
     Hold an active Compete ticket and the round hands you <b>six segment tokens</b> — one per
@@ -327,9 +341,11 @@
     its stake can't be undone. The <b>live table</b> shows every bet and amount the moment it's
     approved, but identity stays masked: you see a suit and a short tag, never who. Seating isn't
     settled yet — for now players are auto-grouped four to a table. The lower rows are group bets —
-    <b>Vowels</b> and <b>Your Ticket</b>, then <b>Red</b> / <b>Black</b> (even money, read off the
-    pocket colours — 18 characters each). Only <b>even / odd</b> are gone, since a letter-and-number
-    alphabet has no parity. <b>Payout is pari-mutuel:</b> every placed
+    <b>Vowels</b> and <b>Your Ticket</b>, then <b>Red</b> / <b>Black</b> (even money off the pocket
+    colours — 18 characters each), and <b>Letter</b> / <b>Number</b> (A–Z vs 0–9 — hover either to
+    see the pockets it covers). There's no <b>even / odd</b> — a letter-and-number alphabet has no
+    parity, so <b>Letter / Number</b> is its natural even-money-style split instead, just an
+    asymmetric one (26 vs 10). <b>Payout is pari-mutuel:</b> every placed
     chip at the table forms one pot, and when the round draws its six locked characters, the pot
     (minus rake) is split among the winners in proportion to <b>stake × fair-multiple</b> — so a
     longshot that hits earns far more per chip than a favourite. The board's <b>36 ÷ (winning
@@ -376,6 +392,8 @@
     if(key==="vow") return {name:"Vowels", odds:fairOdds(6), winset:VOWELS};
     if(key==="red") return {name:"Red", odds:fairOdds(18), winset:new Set([...RED].map(n=>ALPHABET[n-1]))};
     if(key==="black") return {name:"Black", odds:fairOdds(18), winset:new Set(ALPHABET.split("").filter((c,i)=>!RED.has(i+1)))};
+    if(key==="let") return {name:"Letter", odds:fairOdds(26), winset:new Set(ALPHABET.slice(0,26))};
+    if(key==="num") return {name:"Number", odds:fairOdds(10), winset:new Set(ALPHABET.slice(26))};
     if(key==="tick")return {name:"Your Ticket", odds:fairOdds(1), ticketBet:true};
     if(key[0]==="p"){const ch=key.slice(1); return {name:"Exactly "+ch, odds:fairOdds(1), winset:new Set([ch])};}
     if(key.startsWith("col")){const r=+key.slice(3); return {name:"Column "+r, odds:fairOdds(12), winset:columnSet(r)};}
@@ -446,6 +464,7 @@
       document.getElementById("chips").classList.add("locked");
       hint.innerHTML='<b>Phase 2 — place.</b> Every token carries its stake. Pick a token, then a board spot, then <b>approve</b>. Approval is final.';
       startTableSim();
+      requestAnimationFrame(drawConnectors);
     } else if(phase==="load"){
       felt.dataset.lock="Load all six tokens to open the board — "+loadedCount()+" / 6 loaded";
     }
@@ -521,6 +540,63 @@
     name:"Black", desc:"the segment locks on a black character (18 of 36)", count:18, placeable:true,
     gridArea:{col:"8 / 14",row:6}
   }));
+
+  // Letter / Number — the alphanumeric board's stand-in for the absent even/odd.
+  // Complementary pair (A–Z vs 0–9); safe only because one token per segment stops
+  // a player backing both sides of one segment to farm its seed share.
+  const letCell = bet({
+    cls:"out letterbet", key:"let",
+    labHTML:'<span class="lab">Letter</span><span class="sub">A–Z · 26 chars · '+fairOdds(26)+' : 1</span>',
+    name:"Letter", desc:"the segment locks on a letter (A–Z — 26 of 36)", count:26, placeable:true,
+    gridArea:{col:"2 / 8",row:7}
+  });
+  const numCell = bet({
+    cls:"out numberbet", key:"num",
+    labHTML:'<span class="lab">Number</span><span class="sub">0–9 · 10 chars · '+fairOdds(10)+' : 1</span>',
+    name:"Number", desc:"the segment locks on a digit (0–9 — 10 of 36)", count:10, placeable:true,
+    gridArea:{col:"8 / 14",row:7}
+  });
+  board.appendChild(letCell); board.appendChild(numCell);
+
+  // Highlight the pockets a Letter/Number bet covers, and draw a pointer line to them.
+  const LETTERS="ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+  const NUMBERS="0123456789".split("");
+  const markRegion=(chars,on)=>chars.forEach(ch=>{const el=document.querySelector('.pocket[data-key="p'+ch+'"]');if(el)el.classList.toggle("rgn",on);});
+  letCell.addEventListener("mouseenter",()=>markRegion(LETTERS,true));
+  letCell.addEventListener("mouseleave",()=>markRegion(LETTERS,false));
+  numCell.addEventListener("mouseenter",()=>markRegion(NUMBERS,true));
+  numCell.addEventListener("mouseleave",()=>markRegion(NUMBERS,false));
+
+  const svgNS="http://www.w3.org/2000/svg";
+  const rgnSvg=document.createElementNS(svgNS,"svg"); rgnSvg.id="rgnlines";
+  rgnSvg.innerHTML='<defs>'
+    +'<marker id="arw-let" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#7bb8e0"/></marker>'
+    +'<marker id="arw-num" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#e0b264"/></marker>'
+    +'</defs>';
+  document.getElementById("felt").appendChild(rgnSvg);
+  function regionSpan(chars){
+    const fr=document.getElementById("felt").getBoundingClientRect();
+    let x0=Infinity,x1=-Infinity,yBot=-Infinity;
+    chars.forEach(ch=>{const el=document.querySelector('.pocket[data-key="p'+ch+'"]');if(!el)return;
+      const r=el.getBoundingClientRect();x0=Math.min(x0,r.left);x1=Math.max(x1,r.right);yBot=Math.max(yBot,r.bottom);});
+    return {cx:(x0+x1)/2-fr.left, bot:yBot-fr.top};
+  }
+  function cellTopMid(el){const fr=document.getElementById("felt").getBoundingClientRect(),r=el.getBoundingClientRect();return {cx:(r.left+r.right)/2-fr.left, top:r.top-fr.top};}
+  function drawConnectors(){
+    rgnSvg.querySelectorAll("path.let,path.num,text.tag").forEach(e=>e.remove());
+    if(phase!=="place") return;
+    [["let",letCell,LETTERS],["num",numCell,NUMBERS]].forEach(([k,cell,chars])=>{
+      const a=cellTopMid(cell), b=regionSpan(chars);
+      if(!isFinite(b.cx)) return;
+      const y1=a.top-3, y2=b.bot+7, midY=(y1+y2)/2;
+      const p=document.createElementNS(svgNS,"path");
+      p.setAttribute("class",k);
+      p.setAttribute("d","M "+a.cx.toFixed(1)+" "+y1.toFixed(1)+" C "+a.cx.toFixed(1)+" "+midY.toFixed(1)+" "+b.cx.toFixed(1)+" "+midY.toFixed(1)+" "+b.cx.toFixed(1)+" "+y2.toFixed(1));
+      p.setAttribute("marker-end","url(#arw-"+k+")");
+      rgnSvg.appendChild(p);
+    });
+  }
+  window.addEventListener("resize",drawConnectors);
 
   function bet(o){
     const el=document.createElement("div");
@@ -652,7 +728,7 @@
   let tableSimStarted=false;
   function startTableSim(){
     if(tableSimStarted) return; tableSimStarted=true;
-    const keys=["vow","red","black","col1","col2","col3","dz0","dz1","dz2","tick","dd","pM","p7","pA","pQ"];
+    const keys=["vow","red","black","let","num","col1","col2","col3","dz0","dz1","dz2","tick","dd","pM","p7","pA","pQ"];
     const evts=[[900,0],[2600,1],[4700,2],[7200,0],[9800,1]];
     evts.forEach(([ms,seat])=>setTimeout(()=>{
       if(locked||resolved) return;
@@ -692,6 +768,7 @@
     const felt=document.getElementById("felt"); felt.classList.add("locked"); felt.dataset.lock="Load all six tokens to open the board — 0 / 6 loaded";
     document.getElementById("hint").innerHTML='<b>Phase 1 — load.</b> Give every token a chip (min&nbsp;5). The board stays locked until all six are loaded.';
     curSeg=null;curChip=null;paintSel();railDefault();updateTotals();
+    drawConnectors();
   });
 
   // Lock the table: no more placements, pot is fixed, ready to draw.

@@ -91,12 +91,22 @@ payout (see §6).
 | Dozen (1st/2nd/3rd 12) | ∈ that block of 12 | 12 | 2 : 1 |
 | Vowels | ∈ {A E I O U Y} | 6 | 5 : 1 |
 | Red / Black | is a red / black pocket char | 18 | 1 : 1 |
+| Letter | ∈ A–Z | 26 | 0.4 : 1 |
+| Number | ∈ 0–9 | 10 | 2.6 : 1 |
 | Your Ticket | == the bettor's own ticket char for segment n | 1 | 35 : 1 |
 | **Double-Digit** (round-wide) | the full six-char string has **any repeat** | — | 1.8 : 1 |
 
 - A token *is* its segment: SEG 3 on "Exactly-C" checks segment 3's locked char.
 - **Even / Odd are intentionally absent** — a letter-and-number alphabet has no parity.
   Red / Black are kept because the pocket colours give a well-defined 18/18 split.
+- **Letter / Number is the parity stand-in** — the natural binary of an alphanumeric
+  alphabet (A–Z vs 0–9). Unlike Red/Black it is **asymmetric** (26 vs 10), so the two sides
+  carry very different weights (≈0.4:1 vs 2.6:1); "Number" slots between the 2:1 dozens/columns
+  and the 5:1 Vowels. Like every complementary outside pair it is **farm-safe only because of
+  one token per segment** (§4, §6.1): a player cannot back both Letter *and* Number on the same
+  segment to capture that pool's seed risk-free. Note the high-coverage **Letter** side (~72%)
+  raises a *solo* bettor's seed-capture rate versus Red/Black's 50% — still bounded by the
+  per-table seed cap and the rake dial (§9); turn the rake up if it is ever abused.
 - **Double-Digit is the only round-wide bet** — it needs all six characters, so it settles
   **last** (see §7), when the sixth segment locks.
 
