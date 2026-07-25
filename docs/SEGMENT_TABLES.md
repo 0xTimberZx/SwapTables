@@ -93,6 +93,7 @@ payout (see §6).
 | Red / Black | is a red / black pocket char | 18 | 1 : 1 |
 | Letter | ∈ A–Z | 26 | 0.4 : 1 |
 | Number | ∈ 0–9 | 10 | 2.6 : 1 |
+| Low / High | ∈ first-18 (A–R) / last-18 (S–9) | 18 | 1 : 1 |
 | Your Ticket | == the bettor's own ticket char for segment n | 1 | 35 : 1 |
 | **Double-Digit** (round-wide) | the full six-char string has **any repeat** | — | 1.8 : 1 |
 
@@ -107,6 +108,11 @@ payout (see §6).
   segment to capture that pool's seed risk-free. Note the high-coverage **Letter** side (~72%)
   raises a *solo* bettor's seed-capture rate versus Red/Black's 50% — still bounded by the
   per-table seed cap and the rake dial (§9); turn the rake up if it is ever abused.
+- **Low / High is the symmetric even-money split** — first-18 (A–R) vs last-18 (S–9) over the
+  ordered `A–Z0–9`, the analogue of roulette's 1–18 / 19–36. It restores a *third* even-money
+  outside bet (alongside Red/Black and the asymmetric Letter/Number) without changing the seed
+  math, since each side is exactly 18/36. Same one-token-per-segment guard applies: a player
+  can't back both Low and High on one segment.
 - **Double-Digit is the only round-wide bet** — it needs all six characters, so it settles
   **last** (see §7), when the sixth segment locks.
 

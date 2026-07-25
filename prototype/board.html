@@ -125,7 +125,7 @@
     border-radius:14px;padding:20px;border:3px solid var(--gold-dim);
     box-shadow:0 0 0 10px var(--wood),0 0 0 12px #14100a,0 24px 56px -18px rgba(0,0,0,.8),inset 0 0 90px rgba(0,0,0,.35);
   }
-  .board{display:grid;grid-template-columns:1.25fr repeat(12,1fr) 1.15fr;grid-template-rows:repeat(3,54px) 42px 46px 46px 46px;gap:5px}
+  .board{display:grid;grid-template-columns:1.25fr repeat(12,1fr) 1.15fr;grid-template-rows:repeat(3,54px) 42px 46px 46px 46px 46px;gap:5px}
   .cell{display:flex;align-items:center;justify-content:center;border:1px solid var(--felt-line);border-radius:4px;color:var(--cream);user-select:none;position:relative;text-align:center}
   .bet{cursor:pointer;-webkit-tap-highlight-color:transparent;transition:box-shadow .12s ease, filter .12s ease, transform .1s ease}
   .bet:hover{filter:brightness(1.12);box-shadow:0 0 0 1px var(--gold) inset;z-index:3}
@@ -159,20 +159,19 @@
   .bet.redbet .lab{color:#ef9aa1}
   .bet.blackbet{border-color:#50535c}
   .bet.blackbet .lab{color:#d6dfd8}
-  .bet.letterbet{border-color:#4c8fbf}
-  .bet.letterbet .lab{color:#a9d3ee}
-  .bet.numberbet{border-color:#c08a3a}
-  .bet.numberbet .lab{color:#eccf96}
+  .bet.letterbet{border-color:#4c8fbf} .bet.letterbet .lab{color:#a9d3ee}
+  .bet.numberbet{border-color:#c08a3a} .bet.numberbet .lab{color:#eccf96}
+  .bet.lowbet{border-color:#3d9a7a} .bet.lowbet .lab{color:#9adcc4}
+  .bet.highbet{border-color:#8a63ad} .bet.highbet .lab{color:#d4bce8}
 
-  /* pockets belonging to the region a Letter/Number bet is being hovered over */
+  /* pockets belonging to the region of the group bet being hovered */
   .pocket.rgn{box-shadow:0 0 0 2px var(--gold) inset,0 0 16px -2px rgba(215,179,76,.75);z-index:2}
 
-  /* connector lines pointing each new outside bet at the pockets it covers */
+  /* pointer line drawn from the hovered group bet to the pockets it covers */
   #rgnlines{position:absolute;inset:0;pointer-events:none;z-index:5;overflow:visible}
-  #rgnlines path{fill:none;stroke-width:2;stroke-dasharray:5 4;opacity:.9}
-  #rgnlines .let{stroke:#7bb8e0} #rgnlines .num{stroke:#e0b264}
-  #rgnlines .tag{font:700 10px "Arial Narrow",Arial,sans-serif;letter-spacing:.06em}
-  #rgnlines .tag.let{fill:#a9d3ee} #rgnlines .tag.num{fill:#eccf96}
+  #rgnlines path.conn{fill:none;stroke-width:2;stroke-dasharray:5 4;opacity:.95}
+  #rgnlines .conn.let{stroke:#7bb8e0} #rgnlines .conn.num{stroke:#e0b264}
+  #rgnlines .conn.low{stroke:#5bbf9a} #rgnlines .conn.high{stroke:#b58ad8}
 
   /* placed coins on a spot */
   .coins{position:absolute;top:-7px;right:-7px;display:flex;flex-direction:row-reverse;pointer-events:none}
@@ -342,10 +341,11 @@
     approved, but identity stays masked: you see a suit and a short tag, never who. Seating isn't
     settled yet — for now players are auto-grouped four to a table. The lower rows are group bets —
     <b>Vowels</b> and <b>Your Ticket</b>, then <b>Red</b> / <b>Black</b> (even money off the pocket
-    colours — 18 characters each), and <b>Letter</b> / <b>Number</b> (A–Z vs 0–9 — hover either to
-    see the pockets it covers). There's no <b>even / odd</b> — a letter-and-number alphabet has no
-    parity, so <b>Letter / Number</b> is its natural even-money-style split instead, just an
-    asymmetric one (26 vs 10). <b>Payout is pari-mutuel:</b> every placed
+    colours — 18 characters each), then two alphanumeric splits: <b>Letter</b> / <b>Number</b>
+    (A–Z vs 0–9, an asymmetric 26 vs 10) and <b>High</b> / <b>Low</b> (last-18 vs first-18, an even
+    18/18). Hover any of the four to see the exact pockets it covers. There's no <b>even / odd</b> —
+    a letter-and-number alphabet has no parity, so these splits stand in for it. <b>Payout is
+    pari-mutuel:</b> every placed
     chip at the table forms one pot, and when the round draws its six locked characters, the pot
     (minus rake) is split among the winners in proportion to <b>stake × fair-multiple</b> — so a
     longshot that hits earns far more per chip than a favourite. The board's <b>36 ÷ (winning
@@ -394,6 +394,8 @@
     if(key==="black") return {name:"Black", odds:fairOdds(18), winset:new Set(ALPHABET.split("").filter((c,i)=>!RED.has(i+1)))};
     if(key==="let") return {name:"Letter", odds:fairOdds(26), winset:new Set(ALPHABET.slice(0,26))};
     if(key==="num") return {name:"Number", odds:fairOdds(10), winset:new Set(ALPHABET.slice(26))};
+    if(key==="low") return {name:"Low", odds:fairOdds(18), winset:new Set(ALPHABET.slice(0,18))};
+    if(key==="high") return {name:"High", odds:fairOdds(18), winset:new Set(ALPHABET.slice(18))};
     if(key==="tick")return {name:"Your Ticket", odds:fairOdds(1), ticketBet:true};
     if(key[0]==="p"){const ch=key.slice(1); return {name:"Exactly "+ch, odds:fairOdds(1), winset:new Set([ch])};}
     if(key.startsWith("col")){const r=+key.slice(3); return {name:"Column "+r, odds:fairOdds(12), winset:columnSet(r)};}
@@ -541,9 +543,9 @@
     gridArea:{col:"8 / 14",row:6}
   }));
 
-  // Letter / Number — the alphanumeric board's stand-in for the absent even/odd.
-  // Complementary pair (A–Z vs 0–9); safe only because one token per segment stops
-  // a player backing both sides of one segment to farm its seed share.
+  // Even-money-style outside pairs for the alphanumeric alphabet — the stand-ins for the
+  // absent even/odd. Each is a complementary pair; safe only because one token per segment
+  // stops a player backing both sides of one segment to farm its seed share.
   const letCell = bet({
     cls:"out letterbet", key:"let",
     labHTML:'<span class="lab">Letter</span><span class="sub">A–Z · 26 chars · '+fairOdds(26)+' : 1</span>',
@@ -556,47 +558,63 @@
     name:"Number", desc:"the segment locks on a digit (0–9 — 10 of 36)", count:10, placeable:true,
     gridArea:{col:"8 / 14",row:7}
   });
-  board.appendChild(letCell); board.appendChild(numCell);
+  const lowCell = bet({
+    cls:"out lowbet", key:"low",
+    labHTML:'<span class="lab">Low</span><span class="sub">A–R · first 18 · '+fairOdds(18)+' : 1</span>',
+    name:"Low", desc:"the segment locks on any of the first 18 characters (A–R)", count:18, placeable:true,
+    gridArea:{col:"2 / 8",row:8}
+  });
+  const highCell = bet({
+    cls:"out highbet", key:"high",
+    labHTML:'<span class="lab">High</span><span class="sub">S–9 · last 18 · '+fairOdds(18)+' : 1</span>',
+    name:"High", desc:"the segment locks on any of the last 18 characters (S–9)", count:18, placeable:true,
+    gridArea:{col:"8 / 14",row:8}
+  });
+  [letCell,numCell,lowCell,highCell].forEach(c=>board.appendChild(c));
 
-  // Highlight the pockets a Letter/Number bet covers, and draw a pointer line to them.
-  const LETTERS="ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-  const NUMBERS="0123456789".split("");
-  const markRegion=(chars,on)=>chars.forEach(ch=>{const el=document.querySelector('.pocket[data-key="p'+ch+'"]');if(el)el.classList.toggle("rgn",on);});
-  letCell.addEventListener("mouseenter",()=>markRegion(LETTERS,true));
-  letCell.addEventListener("mouseleave",()=>markRegion(LETTERS,false));
-  numCell.addEventListener("mouseenter",()=>markRegion(NUMBERS,true));
-  numCell.addEventListener("mouseleave",()=>markRegion(NUMBERS,false));
+  // Char sets each group bet covers.
+  const chars=ALPHABET.split("");
+  const REGIONS=[
+    [letCell, chars.slice(0,26), "let"],
+    [numCell, chars.slice(26),   "num"],
+    [lowCell, chars.slice(0,18), "low"],
+    [highCell,chars.slice(18),   "high"],
+  ];
 
+  // Hover a group bet → light up the pockets it covers and draw a pointer line to them.
+  const markRegion=(cs,on)=>cs.forEach(ch=>{const el=document.querySelector('.pocket[data-key="p'+ch+'"]');if(el)el.classList.toggle("rgn",on);});
   const svgNS="http://www.w3.org/2000/svg";
   const rgnSvg=document.createElementNS(svgNS,"svg"); rgnSvg.id="rgnlines";
-  rgnSvg.innerHTML='<defs>'
-    +'<marker id="arw-let" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#7bb8e0"/></marker>'
-    +'<marker id="arw-num" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#e0b264"/></marker>'
-    +'</defs>';
+  const MK=(id,fill)=>'<marker id="'+id+'" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="'+fill+'"/></marker>';
+  rgnSvg.innerHTML='<defs>'+MK("arw-let","#7bb8e0")+MK("arw-num","#e0b264")+MK("arw-low","#5bbf9a")+MK("arw-high","#b58ad8")+'</defs>';
   document.getElementById("felt").appendChild(rgnSvg);
-  function regionSpan(chars){
+  function regionSpan(cs){
     const fr=document.getElementById("felt").getBoundingClientRect();
     let x0=Infinity,x1=-Infinity,yBot=-Infinity;
-    chars.forEach(ch=>{const el=document.querySelector('.pocket[data-key="p'+ch+'"]');if(!el)return;
+    cs.forEach(ch=>{const el=document.querySelector('.pocket[data-key="p'+ch+'"]');if(!el)return;
       const r=el.getBoundingClientRect();x0=Math.min(x0,r.left);x1=Math.max(x1,r.right);yBot=Math.max(yBot,r.bottom);});
     return {cx:(x0+x1)/2-fr.left, bot:yBot-fr.top};
   }
   function cellTopMid(el){const fr=document.getElementById("felt").getBoundingClientRect(),r=el.getBoundingClientRect();return {cx:(r.left+r.right)/2-fr.left, top:r.top-fr.top};}
-  function drawConnectors(){
-    rgnSvg.querySelectorAll("path.let,path.num,text.tag").forEach(e=>e.remove());
+  const clearLines=()=>rgnSvg.querySelectorAll("path.conn").forEach(e=>e.remove());
+  function drawConnectors(){ clearLines(); }   // clear on unlock / reset / resize
+  function drawLine(cell,cs,klass){
+    clearLines();
     if(phase!=="place") return;
-    [["let",letCell,LETTERS],["num",numCell,NUMBERS]].forEach(([k,cell,chars])=>{
-      const a=cellTopMid(cell), b=regionSpan(chars);
-      if(!isFinite(b.cx)) return;
-      const y1=a.top-3, y2=b.bot+7, midY=(y1+y2)/2;
-      const p=document.createElementNS(svgNS,"path");
-      p.setAttribute("class",k);
-      p.setAttribute("d","M "+a.cx.toFixed(1)+" "+y1.toFixed(1)+" C "+a.cx.toFixed(1)+" "+midY.toFixed(1)+" "+b.cx.toFixed(1)+" "+midY.toFixed(1)+" "+b.cx.toFixed(1)+" "+y2.toFixed(1));
-      p.setAttribute("marker-end","url(#arw-"+k+")");
-      rgnSvg.appendChild(p);
-    });
+    const a=cellTopMid(cell), b=regionSpan(cs);
+    if(!isFinite(b.cx)) return;
+    const y1=a.top-3, y2=b.bot+7, midY=(y1+y2)/2;
+    const p=document.createElementNS(svgNS,"path");
+    p.setAttribute("class","conn "+klass);
+    p.setAttribute("d","M "+a.cx.toFixed(1)+" "+y1.toFixed(1)+" C "+a.cx.toFixed(1)+" "+midY.toFixed(1)+" "+b.cx.toFixed(1)+" "+midY.toFixed(1)+" "+b.cx.toFixed(1)+" "+y2.toFixed(1));
+    p.setAttribute("marker-end","url(#arw-"+klass+")");
+    rgnSvg.appendChild(p);
   }
-  window.addEventListener("resize",drawConnectors);
+  REGIONS.forEach(([cell,cs,klass])=>{
+    cell.addEventListener("mouseenter",()=>{markRegion(cs,true);drawLine(cell,cs,klass);});
+    cell.addEventListener("mouseleave",()=>{markRegion(cs,false);clearLines();});
+  });
+  window.addEventListener("resize",clearLines);
 
   function bet(o){
     const el=document.createElement("div");
@@ -728,7 +746,7 @@
   let tableSimStarted=false;
   function startTableSim(){
     if(tableSimStarted) return; tableSimStarted=true;
-    const keys=["vow","red","black","let","num","col1","col2","col3","dz0","dz1","dz2","tick","dd","pM","p7","pA","pQ"];
+    const keys=["vow","red","black","let","num","low","high","col1","col2","col3","dz0","dz1","dz2","tick","dd","pM","p7","pA","pQ"];
     const evts=[[900,0],[2600,1],[4700,2],[7200,0],[9800,1]];
     evts.forEach(([ms,seat])=>setTimeout(()=>{
       if(locked||resolved) return;
