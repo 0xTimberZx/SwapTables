@@ -130,6 +130,41 @@ payoutᵢ      = distributable × weightᵢ / Σ winner weights     // 0 if you 
   but the fixed seed). Honest pari-mutuel; the posted multiples only "bite" once a pool has
   ≥ 2 wallets. **UI must show odds as indicative weights, never a guaranteed multiple.**
 
+### 6.1 No house edge — and the structural edge that replaces it
+
+There is **no house edge in the roulette sense**, and there can't be one. Roulette's edge is a
+*fixed-odds* edge: 38 pockets, but a straight-up win pays 35:1 as if there were 36 — the house
+is the counterparty and structurally underpays true odds (that is what 0 / 00 buy). This board
+has neither those pockets nor that mechanism.
+
+Because payout is **pari-mutuel, the house is not the counterparty — the pool is.** Every pot
+(stakes + seed share) is redistributed to that pool's winners, so the house's *entire* take is a
+closed list: the **rake** (§8), **no-winner pools** sweeping to Treasury (§7), and the tiny
+**seed-rake recapture** (§8). Nothing about how a player *places* tokens can add to that list —
+the rake is a percent of the pot no matter how the chips are arranged. A placement rule can only
+redistribute value **among players**; it cannot manufacture house margin.
+
+What the one-token-per-segment model (§4) creates instead is a **player-vs-player structural
+edge** — a forced-diversification / anti-concentration property:
+
+- **No concentration.** You hold exactly one token per segment, so single-pocket stacking
+  *within* a segment is structurally impossible. No whale can pile several chips onto one
+  high-probability pocket to swamp a pool and skim it. (Two tokens on the same *letter* across
+  different segments — SEG 1 on "C", SEG 2 on "C" — are distinct bets in distinct pools, and
+  are fine.)
+- **It guards the seed — and it is what makes complementary outside bets safe.** Outside pairs
+  are near-complementary (Red + Black, and any pair added later, cover ~all 36 symbols). If a
+  player could place two tokens in one segment, they could bet *both sides* and win that pool's
+  seed share risk-free. One-token-per-segment is precisely the guard against that hedge; the
+  seed (§9) stays farmable only within its bounded per-table cap.
+
+Counter-intuitively, the diversification this forces tends to **lower** the house's realised
+take, not raise it: because every seated player loads and places a token in **every** segment,
+the six segment pools run **crowded** (high distinct-wallet `n`), which drives graduated rake
+toward its **1.5% floor** (§8) and — via broad coverage — makes no-winner sweeps rarer. Cheap
+for honest crowds, hostile to concentration and seed-farming: a good combination, but not a
+house edge.
+
 ---
 
 ## 7. Real-time settlement, retire-at-six
