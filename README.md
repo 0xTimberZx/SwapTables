@@ -50,6 +50,9 @@ live in [`docs/SEGMENT_TABLES.md`](docs/SEGMENT_TABLES.md).
 | `RAKE_BASE` | 8% | rake for a solo pool |
 | `RAKE_FLOOR` | 1.75% | `rake(n) = FLOOR + (BASE − FLOOR)/n`, n = distinct wallets in pool (2 wallets → 4.88%) |
 | `TABLES_MAX` | 40 | expect 2–4 live |
+| `SEATS` | min 2 · target 4 · soft 8 · hard 12 | no solo tables; hard cap is gas-bound, not chain-bound |
+| `SEED_MIN_WALLETS` | 2 | a pool draws its seed share only with ≥2 distinct wallets (anti-farm) |
+| tables / wallet | uncapped | gated only by an active ticket |
 | tokens | per-table | six issued each time you sit down |
 | payouts | push | auto-credit on each segment lock (retire-at-six leaves nothing to claim) |
 

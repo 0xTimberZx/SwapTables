@@ -239,9 +239,14 @@ RAKE_BASE = 8%   RAKE_FLOOR = 1.75%
 ## 9. Table seed & money flow
 
 - **`TABLE_SEED = 100 TIMBS`**, split ~evenly across the seven pools (≈14 each) so every
-  real-time per-segment payout has house-side liquidity and **solo play is winnable** (a lone
-  25-chip winner takes ≈ `seed_share + 25`).
-- **Seeding *is* the boot condition:** no table starts until it is seeded.
+  real-time per-segment payout has house-side liquidity.
+- **Seed is held per pool (`SEED_MIN_WALLETS = 2`).** A pool draws its ≈14 share only once it has
+  **≥ 2 distinct wallets**; a solo pool forfeits its share to Treasury. This is the anti-farm guard
+  from §9.1 resolved: the seed sweetens *contested* pools only, and a lone actor can no longer skim
+  it. This deliberately supersedes the earlier "solo play is winnable off the seed" goal — a
+  chosen trade for farm-resistance, paired with the raised solo rake (§8).
+- **Seeding *is* the boot condition:** no table starts until it is seeded, and a table only opens
+  once it has `SEATS_MIN` seated (see §9.2) — there are no solo tables.
 - **Funded from the closing table's swept leftovers first, Treasury tops up the rest** — the
   "close one, open one" loop is partly self-perpetuating instead of a fresh Treasury draw
   every time.
@@ -250,8 +255,9 @@ RAKE_BASE = 8%   RAKE_FLOOR = 1.75%
   200–400 TIMBS. Cross-subsidy happens **at the Treasury level** (swap fees + token activity
   carry a quiet game week), never inside a pool — so the game can never insolvency-spiral or
   over-promise: it only ever pays out what is in the pool.
-- **Farming ceiling:** with graduated rake, the most a solo actor can bleed from a table ≈ one
-  seed, taxed at 8% (solo), and only on a win. Turning the rake dial up further neutralizes it.
+- **Farming ceiling:** solo pools now draw **no** seed (above) *and* pay the top 8% rake, so a
+  lone actor's edge off a table is ≈ nil — the seed is only ever exposed to pools with ≥ 2 real
+  wallets. Turning the rake dial up further only tightens it.
 
 *Open sizing note:* 100 TIMBS is a chip-economics default. To size as a % of runway instead,
 we need the Treasury balance + TIMBS pool price (target ≈ 40×seed ≤ a few % of Treasury).
@@ -286,9 +292,18 @@ What we rely on instead — all soft/structural, none timing-dependent:
 
 ### 9.2 Seating, eligibility & the inactive-ticket path
 
-- **Seating.** A seat requires an active Compete ticket, and a wallet may sit at **multiple
-  tables at once** — each seat issues its own six per-table tokens. The bound is a
-  *tables-per-wallet* cap (§11), not one-table-only.
+- **Seating — locked band.** A seat requires an active Compete ticket, and a wallet may sit at
+  **multiple tables at once** — each seat issues its own six per-table tokens.
+  - `SEATS_MIN = 2` — a table won't open/seed below this (no solo tables).
+  - `SEATS_TARGET = 4` — the typical live table; the UI shows ~2.
+  - `SEATS_SOFT_MAX = 8` — soft cap for pari-mutuel legibility.
+  - `SEATS_HARD_MAX = 12` — hard cap, comfortably inside the per-lock settlement gas envelope.
+  - **Tables per wallet: uncapped** — gated solely by holding an active ticket. No numeric cap is
+    needed because the per-pool seed guard (`SEED_MIN_WALLETS = 2`, §9) removes the cross-table
+    solo-farming incentive directly, and rake counts distinct wallets (§8). The safe player count
+    is **gas-bound, not chain-bound**: each lock settles one pool, so even the hard cap is a tiny
+    winners loop on Arbitrum; the design favors many parallel small tables (≤ ~40) over few large
+    ones.
 - **Eligibility is continuous.** A seat is valid only while its ticket is active. The moment the
   ticket goes inactive/ineligible (expired, consumed, revoked, …) the wallet can no longer
   **load or place** new chips at any seat.
@@ -341,19 +356,11 @@ What we rely on instead — all soft/structural, none timing-dependent:
   reads settled segments from TimbPrize and owns chip escrow + pools. (Leaning standalone:
   40×7 pools is a lot of state to bolt onto TimbPrize.)
 - Whether Double-Digit's seed share rolls into segment pools if no DD bets exist.
-- **Thin-pool seed-subsidy guard** (from §9.1) — the one real concentration risk is a lone whale
-  on a near-empty table backing a wide group (e.g. Letter ~72%) to skim the seed. Decide the
-  mechanism: *don't release the seed until N distinct wallets are seated*, and/or *scale each
-  pool's seed share with distinct-wallet count*. Preferred over any bet cap.
-- **Seating / eligibility bounds** — players-per-table (currently ~4) and **tables-per-wallet per
-  round**; these bound pool size and cross-table seed-farming far better than per-area limits.
-- **Players-per-table safe band.** *Lower* bound = the seed-release minimum (§9.1 guard). *Upper*
-  bound is set by pari-mutuel legibility and **per-lock settlement gas**, not by "the chain" in the
-  abstract: each segment lock settles one pool, and any push-pay must loop over that pool's winners
-  within block gas. On Arbitrum a few dozen winners/pool is trivially cheap, so small tables are far
-  from the limit — the architecture deliberately favors **many parallel small tables (≤~40)** over a
-  few large ones. Pick the band (candidate: **min 2–3** distinct wallets to release the seed, **soft
-  max ~8–12** for legibility) and confirm the per-lock gas envelope on the target chain.
+- **Seed-guard leftover mechanism** — the *threshold* is locked (`SEED_MIN_WALLETS = 2` per pool,
+  §9). Still to confirm: a forfeited solo-pool seed share goes to **Treasury** (current default) vs.
+  **rolling into the table's qualifying pools**. Overlaps the Double-Digit rollover question below.
+- **Confirm the per-lock gas envelope** on the target chain for `SEATS_HARD_MAX` (§9.2) — expected
+  trivial on Arbitrum, but measure before finalizing the hard cap.
 - **Push vs. pull payout.** Retire-at-six needs push-pay (nothing claimable later), but a push to a
   contract recipient that reverts could brick a whole pool's settlement. Need a **pull-claim
   fallback** (credit an in-contract balance if the push fails) so one griefing recipient can't DoS
