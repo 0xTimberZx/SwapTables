@@ -116,8 +116,10 @@ with a localStorage fallback. A same-origin local dashboard lives at
 ## Status
 
 **Design → pre-implementation.** The mechanic is specced and prototyped; no contract or backend
-written yet. Next unblockers (from the spec's open items): the per-segment *bets-closed* cutoff,
-and confirming the standalone-`SegmentBoard`-in-TimbSwap contract shape.
+written yet. The segment-lock scheme is now specced (commit–reveal + future-block entropy, VRF as
+the Phase-2 hardening path — see `docs/SEGMENT_TABLES.md` §10). Next unblockers (from the spec's
+open items): the lock cadence/cutoff dials + reveal bond, and confirming the standalone-`SegmentBoard`
+contract shape.
 
 ## License
 

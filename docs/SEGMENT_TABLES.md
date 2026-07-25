@@ -216,7 +216,7 @@ RAKE_BASE = 8%   RAKE_FLOOR = 1.75%
 | → ∞ | 1.75% (floor) |
 
 > **Why the curve moved up (from 5% / 1.5%).** Once the seed is *held until enough distinct
-> wallets are seated* (§9.1, §11), the house is carrying more coordination cost and the thin-pool
+> wallets are seated* (§9.1, §9), the house is carrying more coordination cost and the thin-pool
 > subsidy is more valuable, so the whole curve is bumped: solo now pays **8%** and the floor is
 > **1.75%**. Note the graduated formula still applies — **two wallets pay 4.88%**, not 8% (only a
 > solo pool pays the full base). If the intent is for small pools to bite harder still (e.g. ~8%
@@ -286,7 +286,7 @@ What we rely on instead — all soft/structural, none timing-dependent:
 - **Min 5**, **graduated rake + solo-flatten**, and the **seven-way seed split** — these make
   concentration self-*taxing* rather than forbidden (§6, §8).
 - **Seating / eligibility bounds over area caps** — players-per-table and tables-per-wallet do
-  the real anti-farming work (see §11).
+  the real anti-farming work (see §9.2).
 - **Transparency over caps** — surface live per-pool totals and the current implied per-chip
   return so the crowd rebalances itself; that is the pari-mutuel-native "limit."
 
@@ -329,7 +329,74 @@ What we rely on instead — all soft/structural, none timing-dependent:
 
 ---
 
-## 10. Invariants / test checklist (for when this is built)
+## 10. Segment lock: entropy, trigger & timing
+
+How each segment's character is fixed at lock time. **Chosen: commit–reveal bound to a future
+block hash, now; Chainlink VRF as the Phase-2 hardening path behind the same interface.**
+
+### 10.1 Derivation
+
+At table open, *before any bet*, the protocol generates a per-segment secret `sᵢ` (i = 1..6) and
+publishes `commitᵢ = keccak256(sᵢ ‖ tableId ‖ i)` on-chain. Each segment has a scheduled **lock
+block `Lᵢ`**. The locked character is:
+
+```
+charᵢ = jitter( seedᵢ , sᵢ , blockhash(Lᵢ) , velocityᵢ )        // → one of A–Z0–9
+```
+
+- `seedᵢ` — initial meter state from the prior recorded winning string (**seed, not answer**).
+- `sᵢ` — the secret revealed at lock (committed at open, so it can't be swapped after seeing bets).
+- `blockhash(Lᵢ)` — the lock block's hash: **unknowable to everyone, the protocol included, until
+  `Lᵢ` is mined** (which is after bets close).
+- `velocityᵢ` — accumulated swap velocity/entropy; a **rate/mixing** input only.
+- `jitter(...)` reuses TimbPrize's class-preserving mapping (§13.2), so the char inherits an
+  already-reviewed uniform mapping.
+
+**Guard #1 holds:** the only secret-holder is the protocol, but `sᵢ` alone doesn't fix `charᵢ` —
+`blockhash(Lᵢ)` does, and no one has that before `Lᵢ`. So no party can compute a segment's char
+before it locks.
+**Guard #2 holds:** swaps enter only through `velocityᵢ` (how fast / how erratically the meter
+runs); the char is pinned by the block hash, so no swap sequence shifts *which* char lands.
+
+### 10.2 Trigger & reveal-liveness
+
+- **Normal path:** at `Lᵢ` the protocol submits `reveal(sᵢ)`. The contract checks
+  `keccak256(sᵢ ‖ tableId ‖ i) == commitᵢ`, reads `blockhash(Lᵢ)`, computes `charᵢ`, settles pool
+  `i`, and push-pays (§7).
+- **Reveal window `W`,** with **`W < 256` blocks** so `blockhash(Lᵢ)` is still retrievable (the EVM
+  only exposes the last 256 block hashes).
+- **Missed reveal → bond slash + permissionless fallback.** If the protocol doesn't reveal in `W`,
+  anyone may call a fallback that fixes `charᵢ` from block-hash entropy **without** the secret, so a
+  table can never stall; the protocol forfeits a posted bond. Withholding can't help the protocol
+  pick an outcome (the block hash dominates regardless), so the only motive to withhold is
+  griefing/stall — which the bond + fallback neutralize.
+
+### 10.3 Cadence & bets-closed cutoff
+
+- Six segments lock **one at a time**, staggered across the round (spacing = a dial).
+- Each segment `i` has a **bets-closed cutoff `Cᵢ`** a short window before `Lᵢ`: no new placement on
+  segment `i` after `Cᵢ`. Since `charᵢ` depends on `blockhash(Lᵢ)` (unknown at `Cᵢ`), sniping can't
+  predict the char anyway — the cutoff exists to kill last-block latency games and keep settlement
+  clean. Cutoff length = a dial (candidate: a few blocks before `Lᵢ`).
+- **Double-Digit** closes at the last segment's cutoff and settles on the sixth lock (needs all six
+  chars).
+
+### 10.4 Verifiability
+
+On each lock the contract emits `(tableId, i, sᵢ, Lᵢ, blockhash(Lᵢ), velocityᵢ, charᵢ)`. Anyone can
+recompute `charᵢ` and check it against the `commitᵢ` published at open — proving the protocol
+neither knew the char early nor swapped secrets after bets landed.
+
+### 10.5 VRF hardening (Phase 2)
+
+Same lock interface, entropy swapped: `charᵢ = jitter(seedᵢ, VRFᵢ, velocityᵢ)` with `VRFᵢ` from
+Chainlink VRF requested at `Lᵢ`. Removes the reveal-liveness duty and any sequencer-trust residue,
+at the cost of LINK + callback latency across many parallel locks. Because it sits behind the same
+interface, the upgrade is a module swap, not a redesign.
+
+---
+
+## 11. Invariants / test checklist (for when this is built)
 
 - [ ] No party can derive a segment's locked char before it locks (guard #1).
 - [ ] No swap sequence biases a segment toward a chosen char beyond uniform (guard #2).
@@ -345,16 +412,25 @@ What we rely on instead — all soft/structural, none timing-dependent:
       already-placed bet — finality and pool conservation for co-bettors both hold.
 - [ ] Every return and push-paid winning for an inactive better resolves on-chain with no UI
       action; a reverting recipient falls back to a pull-claim rather than bricking settlement.
+- [ ] `commitᵢ` is published before any bet on the table; a reveal must match its commit, else the
+      fallback fixes the char and the protocol's bond is slashed (§10.2).
+- [ ] `charᵢ` depends on `blockhash(Lᵢ)` (or `VRFᵢ`) that is unknowable at the bets-closed cutoff
+      `Cᵢ` — no early derivation by anyone, protocol included (guard #1, §10.1).
+- [ ] Reveal window `W < 256` blocks so `blockhash(Lᵢ)` is retrievable; the fallback snapshots it.
+- [ ] Swap inputs affect only `velocityᵢ`; adding or reordering swaps never shifts `charᵢ`'s
+      distribution (guard #2, §10.1).
 
 ---
 
-## 11. Open items (not yet decided)
+## 12. Open items (not yet decided)
 
 - Exact **seed sizing** vs. Treasury runway (needs Treasury balance + TIMBS price).
-- **Per-segment "bets closed" cutoff** — how many seconds/segments-ahead before a lock.
-- **Contract shape** — extend TimbPrize/GameRegistry vs. a standalone `SegmentBoard` that
-  reads settled segments from TimbPrize and owns chip escrow + pools. (Leaning standalone:
-  40×7 pools is a lot of state to bolt onto TimbPrize.)
+- **Lock cadence & cutoff dials** — the lock mechanism is specced (§10); still to set the segment
+  spacing across the round and the `Cᵢ` bets-closed length (§10.3), plus the reveal window `W` and
+  the reveal-liveness **bond size** (§10.2).
+- **Contract shape** — extend TimbPrize/GameRegistry vs. a standalone `SegmentBoard` that reads
+  settled segments from TimbPrize and owns chip escrow + pools + the lock logic of §10. (Leaning
+  standalone: 40×7 pools + per-table commits is a lot of state to bolt onto TimbPrize.)
 - Whether Double-Digit's seed share rolls into segment pools if no DD bets exist.
 - **Seed-guard leftover mechanism** — the *threshold* is locked (`SEED_MIN_WALLETS = 2` per pool,
   §9). Still to confirm: a forfeited solo-pool seed share goes to **Treasury** (current default) vs.
