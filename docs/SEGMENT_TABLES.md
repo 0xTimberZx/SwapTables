@@ -248,6 +248,34 @@ RAKE_BASE = 5%   RAKE_FLOOR = 1.5%
 *Open sizing note:* 100 TIMBS is a chip-economics default. To size as a % of runway instead,
 we need the Treasury balance + TIMBS pool price (target ≈ 40×seed ≤ a few % of Treasury).
 
+### 9.1 Bet limits & thresholds — resolved
+
+**No hard caps on how much can sit on one area relative to others.** A physical table's
+*maximum* exists to bound the **house's** fixed-odds liability (one straight-up whale = a 35×
+payout the house must cover). Pari-mutuel removes that reason entirely: the pool is the
+counterparty, so a large bet on any spot creates **zero** house liability — it can only ever be
+paid from money already in the pool.
+
+Relative-area limits are also the wrong tool here:
+
+- **The price already is the relative limit.** Payout on an area scales inversely with how much
+  is on it (§6), so over-concentration thins its own return and ignored areas pay more —
+  continuously, with no rule. A hard cap is a blunt duplicate of what the math does smoothly.
+- **A relative cap would be ordering-unfair** (whoever bets later gets blocked by earlier bets),
+  **gameable** by splitting across wallets (the exact thing distinct-wallet rake fights), and it
+  **distorts the signal** the pool is supposed to broadcast.
+
+What we rely on instead — all soft/structural, none timing-dependent:
+
+- **One token per segment = one bet per segment per wallet** — the cleanest concentration limit
+  there is; a wallet structurally cannot stack a pool (§4).
+- **Min 5**, **graduated rake + solo-flatten**, and the **seven-way seed split** — these make
+  concentration self-*taxing* rather than forbidden (§6, §8).
+- **Seating / eligibility bounds over area caps** — players-per-table and tables-per-wallet do
+  the real anti-farming work (see §11).
+- **Transparency over caps** — surface live per-pool totals and the current implied per-chip
+  return so the crowd rebalances itself; that is the pari-mutuel-native "limit."
+
 ---
 
 ## 10. Invariants / test checklist (for when this is built)
@@ -273,3 +301,9 @@ we need the Treasury balance + TIMBS pool price (target ≈ 40×seed ≤ a few %
   reads settled segments from TimbPrize and owns chip escrow + pools. (Leaning standalone:
   40×7 pools is a lot of state to bolt onto TimbPrize.)
 - Whether Double-Digit's seed share rolls into segment pools if no DD bets exist.
+- **Thin-pool seed-subsidy guard** (from §9.1) — the one real concentration risk is a lone whale
+  on a near-empty table backing a wide group (e.g. Letter ~72%) to skim the seed. Decide the
+  mechanism: *don't release the seed until N distinct wallets are seated*, and/or *scale each
+  pool's seed share with distinct-wallet count*. Preferred over any bet cap.
+- **Seating / eligibility bounds** — players-per-table (currently ~4) and **tables-per-wallet per
+  round**; these bound pool size and cross-table seed-farming far better than per-area limits.
