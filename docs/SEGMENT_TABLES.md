@@ -329,70 +329,111 @@ What we rely on instead — all soft/structural, none timing-dependent:
 
 ---
 
-## 10. Segment lock: entropy, trigger & timing
+## 10. Segment lock: the spin — entropy, velocity & timing
 
-How each segment's character is fixed at lock time. **Chosen: commit–reveal bound to a future
-block hash, now; Chainlink VRF as the Phase-2 hardening path behind the same interface.**
+Each segment is a **roulette spin**. The meter is the ball: it spins up, runs, decays, and settles
+into one character. Swaps are the only thing players push on, and they move the *ball's speed*, never
+where it lands. **Chosen: commit–reveal bound to a future block hash now; Chainlink VRF as the
+Phase-2 entropy, with the pre-VRF path kept as a covert fallback (§10.6).**
 
 ### 10.1 Derivation
 
 At table open, *before any bet*, the protocol generates a per-segment secret `sᵢ` (i = 1..6) and
-publishes `commitᵢ = keccak256(sᵢ ‖ tableId ‖ i)` on-chain. Each segment has a scheduled **lock
-block `Lᵢ`**. The locked character is:
+publishes `commitᵢ = keccak256(sᵢ ‖ tableId ‖ i)` on-chain. Each segment settles at a **settle block
+`Lᵢ`** (the pick moment, §10.3). The locked character is:
 
 ```
-charᵢ = jitter( seedᵢ , sᵢ , blockhash(Lᵢ) , velocityᵢ )        // → one of A–Z0–9
+charᵢ = jitter( seedᵢ , entropyᵢ , spinPathᵢ )        // → one of A–Z0–9
+   entropyᵢ  = VRFᵢ  (Phase 2)  |  sᵢ ⊕ blockhash(Lᵢ)  (now / covert fallback)
+   spinPathᵢ = the accumulated velocity envelope over the spin (swap-driven, §10.2)
 ```
 
-- `seedᵢ` — initial meter state from the prior recorded winning string (**seed, not answer**).
-- `sᵢ` — the secret revealed at lock (committed at open, so it can't be swapped after seeing bets).
-- `blockhash(Lᵢ)` — the lock block's hash: **unknowable to everyone, the protocol included, until
-  `Lᵢ` is mined** (which is after bets close).
-- `velocityᵢ` — accumulated swap velocity/entropy; a **rate/mixing** input only.
+- `seedᵢ` — a **prior winning TimbSwap string** used only to randomize the meter's *start position*
+  (**seed, not answer**), drawn via `entropyᵢ`. A string is **never reused** — a used-seed registry
+  enforces uniqueness across all tables and segments.
+- `entropyᵢ` — the unpredictable term. Now: `sᵢ` (revealed at settle) mixed with `blockhash(Lᵢ)`,
+  **unknowable to everyone, the protocol included, until `Lᵢ` is mined** (after bets close). Phase 2:
+  Chainlink `VRFᵢ`.
+- `spinPathᵢ` — how the meter actually travelled (its velocity envelope): a **rate/mixing** input
+  only, fed by swaps. It changes the journey, not the landing.
 - `jitter(...)` reuses TimbPrize's class-preserving mapping (§13.2), so the char inherits an
   already-reviewed uniform mapping.
 
-**Guard #1 holds:** the only secret-holder is the protocol, but `sᵢ` alone doesn't fix `charᵢ` —
-`blockhash(Lᵢ)` does, and no one has that before `Lᵢ`. So no party can compute a segment's char
-before it locks.
-**Guard #2 holds:** swaps enter only through `velocityᵢ` (how fast / how erratically the meter
-runs); the char is pinned by the block hash, so no swap sequence shifts *which* char lands.
+**Guard #1 holds:** the char is pinned by `entropyᵢ`, and no party has it before `Lᵢ` — the
+protocol's secret alone doesn't determine the char; the future block hash (or VRF) does.
+**Guard #2 holds:** swaps enter only through `spinPathᵢ` (how fast / how erratically the ball runs);
+the landing is fixed by `entropyᵢ`, so no swap sequence shifts *which* char lands.
 
-### 10.2 Trigger & reveal-liveness
+### 10.2 The spin: velocity envelope (dealer strategy)
+
+The meter runs on a velocity envelope shaped by **player count** — the mechanical version of a dealer
+choosing a long or short spin:
+
+- **Spin-up.** Swaps begin feeding the meter the moment a table meets its seat requirement
+  (`SEATS_MIN`, §9.2) — which can happen well before the entry cutoff. More players ⇒ the ball is spun
+  **sooner** and accelerates **harder** toward its running (jitter) velocity.
+- **Run.** Through the mid-spin the meter jitters at speed; swaps keep adding velocity/entropy. A
+  busy table spins faster and more erratically than a thin one.
+- **Decay & settle.** The same crowd that spun it up also settles it **sooner**: more players ⇒
+  earlier, steeper decay into the landing. A thin table spins lazily and drifts longer. The meter
+  self-settles onto a char and is reconciled against **TimbSettler** at the pick (§10.3).
+
+("Jitter speed" from earlier chats = this **running velocity**; the envelope is the spin curve.)
+
+### 10.3 Timing marks (per segment — all dials)
+
+Measured within the segment window; candidate values are the user's:
+
+- **Entry — open → 40-min mark.** Anyone may join / place before the 40-min mark. **After 40 min no
+  new entries**: the spin is locked in and the ball is committed to its envelope. (Seats can fill any
+  time in this window; swaps start pushing velocity as soon as `SEATS_MIN` is met, §10.2.)
+- **Bets close — last 5 min.** No new bets in the final 5 minutes. Swaps still land and add **large
+  jitter**, but their influence **decays** approaching the 3 → 2 → 1-min marks.
+- **The pick — 1-min mark, +55s.** By the 1-min mark swap influence ≈ 0. **55 seconds later** (~5s
+  before end) the meter makes a **definitive pick**, displays it while settling, and cross-checks
+  TimbSettler; `Lᵢ` is that settle block.
+- **Six segments + Double-Digit.** How the six per-segment windows stagger or overlap, and DD
+  settling on the sixth pick, is an open cadence dial (§12).
+
+Because the char depends on `entropyᵢ` unknowable until `Lᵢ`, closing bets early isn't what stops
+sniping (nothing to snipe) — it keeps the last minute a pure settle with no new stakes landing on a
+ball already committed.
+
+### 10.4 Trigger & reveal-liveness
 
 - **Normal path:** at `Lᵢ` the protocol submits `reveal(sᵢ)`. The contract checks
-  `keccak256(sᵢ ‖ tableId ‖ i) == commitᵢ`, reads `blockhash(Lᵢ)`, computes `charᵢ`, settles pool
+  `keccak256(sᵢ ‖ tableId ‖ i) == commitᵢ`, mixes in `blockhash(Lᵢ)`, computes `charᵢ`, settles pool
   `i`, and push-pays (§7).
-- **Reveal window `W`,** with **`W < 256` blocks** so `blockhash(Lᵢ)` is still retrievable (the EVM
-  only exposes the last 256 block hashes).
+- **Reveal window `W < 256` blocks** so `blockhash(Lᵢ)` is still retrievable (the EVM only exposes
+  the last 256 block hashes).
 - **Missed reveal → bond slash + permissionless fallback.** If the protocol doesn't reveal in `W`,
-  anyone may call a fallback that fixes `charᵢ` from block-hash entropy **without** the secret, so a
-  table can never stall; the protocol forfeits a posted bond. Withholding can't help the protocol
-  pick an outcome (the block hash dominates regardless), so the only motive to withhold is
-  griefing/stall — which the bond + fallback neutralize.
+  anyone may fix `charᵢ` from block-hash entropy **without** the secret, so a table can never stall;
+  the protocol forfeits a posted bond. Withholding can't steer the outcome (the block hash dominates
+  regardless), so its only motive is griefing/stall — which the bond + fallback neutralize.
 
-### 10.3 Cadence & bets-closed cutoff
+### 10.5 Verifiability
 
-- Six segments lock **one at a time**, staggered across the round (spacing = a dial).
-- Each segment `i` has a **bets-closed cutoff `Cᵢ`** a short window before `Lᵢ`: no new placement on
-  segment `i` after `Cᵢ`. Since `charᵢ` depends on `blockhash(Lᵢ)` (unknown at `Cᵢ`), sniping can't
-  predict the char anyway — the cutoff exists to kill last-block latency games and keep settlement
-  clean. Cutoff length = a dial (candidate: a few blocks before `Lᵢ`).
-- **Double-Digit** closes at the last segment's cutoff and settles on the sixth lock (needs all six
-  chars).
+On each pick the contract emits enough to recompute `charᵢ` (`seedᵢ`, the entropy inputs actually
+used, `spinPathᵢ` summary, `Lᵢ`, `charᵢ`) and check it against the `commitᵢ` published at open —
+proving the protocol neither knew the char early nor swapped secrets after bets landed. **Tension to
+resolve (§12):** full public verifiability of *which entropy path ran* partly conflicts with the
+covert fallback (§10.6); the plan is to emit enough to verify the char is correct **given the entropy
+actually used**, without surfacing a prominent "fell back" flag.
 
-### 10.4 Verifiability
+### 10.6 VRF era & the covert fallback
 
-On each lock the contract emits `(tableId, i, sᵢ, Lᵢ, blockhash(Lᵢ), velocityᵢ, charᵢ)`. Anyone can
-recompute `charᵢ` and check it against the `commitᵢ` published at open — proving the protocol
-neither knew the char early nor swapped secrets after bets landed.
+Phase 2 makes `entropyᵢ = VRFᵢ` (Chainlink), removing the reveal-liveness duty and any
+sequencer-trust residue. The pre-VRF path (§10.1 `sᵢ ⊕ blockhash`) is **not retired** — it stays as a
+**silent fallback**: if a VRF request fails or stalls, the char is fixed from the pre-VRF path with
+**identical settle timing and UX and no "degraded" flag**, so an attacker can't detect a weak window
+and time an attack to it.
 
-### 10.5 VRF hardening (Phase 2)
-
-Same lock interface, entropy swapped: `charᵢ = jitter(seedᵢ, VRFᵢ, velocityᵢ)` with `VRFᵢ` from
-Chainlink VRF requested at `Lᵢ`. Removes the reveal-liveness duty and any sequencer-trust residue,
-at the cost of LINK + callback latency across many parallel locks. Because it sits behind the same
-interface, the upgrade is a module swap, not a redesign.
+**Honest caveat — this is defense-in-depth, not the security boundary.** Chainlink VRF requests and
+fulfillments are on-chain observable, so a determined expert may still infer that a fallback ran. The
+real guarantee is that **the fallback path is itself unpredictable** (future block hash), so even a
+*detected* fallback gives no predictive edge. Not advertising the fallback (no distinct event, flag,
+or UX change) simply raises the attacker's cost — it never carries the safety on its own. Same lock
+interface either way, so the VRF upgrade is a module swap, not a redesign.
 
 ---
 
@@ -413,21 +454,37 @@ interface, the upgrade is a module swap, not a redesign.
 - [ ] Every return and push-paid winning for an inactive better resolves on-chain with no UI
       action; a reverting recipient falls back to a pull-claim rather than bricking settlement.
 - [ ] `commitᵢ` is published before any bet on the table; a reveal must match its commit, else the
-      fallback fixes the char and the protocol's bond is slashed (§10.2).
-- [ ] `charᵢ` depends on `blockhash(Lᵢ)` (or `VRFᵢ`) that is unknowable at the bets-closed cutoff
-      `Cᵢ` — no early derivation by anyone, protocol included (guard #1, §10.1).
+      fallback fixes the char and the protocol's bond is slashed (§10.4).
+- [ ] `charᵢ` depends on `entropyᵢ` (VRF or `sᵢ ⊕ blockhash(Lᵢ)`) unknowable until the pick block
+      `Lᵢ` — no early derivation by anyone, protocol included (guard #1, §10.1).
 - [ ] Reveal window `W < 256` blocks so `blockhash(Lᵢ)` is retrievable; the fallback snapshots it.
-- [ ] Swap inputs affect only `velocityᵢ`; adding or reordering swaps never shifts `charᵢ`'s
-      distribution (guard #2, §10.1).
+- [ ] Swap inputs affect only `spinPathᵢ` (velocity); adding or reordering swaps never shifts
+      `charᵢ`'s distribution (guard #2, §10.1/§10.2).
+- [ ] **Seed uniqueness:** no winning TimbSwap string is ever reused as a `seedᵢ` — the used-seed
+      registry rejects repeats across all tables and segments (§10.1).
+- [ ] **Covert fallback is silent:** a VRF-era fallback to the pre-VRF path emits no distinguishing
+      flag and does not change settle timing or UX; and the fallback char is itself unpredictable, so
+      detection grants no edge (§10.6).
+- [ ] **No new entries after the 40-min mark; no new bets in the last 5 min**; swap influence decays
+      to ≈0 by the 1-min mark and the pick lands ~55s later (§10.3).
 
 ---
 
 ## 12. Open items (not yet decided)
 
 - Exact **seed sizing** vs. Treasury runway (needs Treasury balance + TIMBS price).
-- **Lock cadence & cutoff dials** — the lock mechanism is specced (§10); still to set the segment
-  spacing across the round and the `Cᵢ` bets-closed length (§10.3), plus the reveal window `W` and
-  the reveal-liveness **bond size** (§10.2).
+- **Spin-envelope dials** — the mechanism is specced (§10); still to set the actual numbers: the
+  40-min entry cutoff, the 5-min bets-close, the swap-influence decay curve into the 3-2-1-min marks,
+  and the 55s-after-1-min pick (§10.3) — plus the reveal window `W` and reveal-liveness **bond size**
+  (§10.4). Also the exact **player-count → envelope** function (how many players buy how much earlier
+  a spin-up / steeper decay, §10.2).
+- **Six-segment cadence** — whether the six per-segment windows run in sequence, overlap, or nest,
+  and how Double-Digit settles on the sixth pick (§10.3).
+- **Settle ordering vs. TimbSettler** — "reconcile microseconds behind TimbSettler" is the UX intent,
+  but L2 granularity is sub-second at best. Define the real ordering: does SwapTables read a settled
+  TimbSettler result in the same block, the next, or run independently and reconcile? (§10.2/§10.3).
+- **Verifiability vs. covert fallback** — reconcile emitting enough to prove `charᵢ` fair against
+  *not* surfacing a "fell back" flag (§10.5/§10.6).
 - **Contract shape** — extend TimbPrize/GameRegistry vs. a standalone `SegmentBoard` that reads
   settled segments from TimbPrize and owns chip escrow + pools + the lock logic of §10. (Leaning
   standalone: 40×7 pools + per-table commits is a lot of state to bolt onto TimbPrize.)
