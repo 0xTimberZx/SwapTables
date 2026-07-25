@@ -117,10 +117,11 @@ with a localStorage fallback. A same-origin local dashboard lives at
 
 **Design → pre-implementation.** The mechanic is specced and prototyped; no contract or backend
 written yet. The segment lock is now specced as a **roulette-style spin** — a player-count-driven
-velocity envelope (spin-up → run → settle), commit–reveal + future-block entropy now, VRF later with
-the pre-VRF path kept as a covert fallback (see `docs/SEGMENT_TABLES.md` §10). Next unblockers (spec
-§12 open items): the spin-envelope dials (40-min entry, 5-min bets-close, decay curve, 55s pick),
-the six-segment cadence, settle ordering vs. TimbSettler, and the standalone-`SegmentBoard` shape.
+velocity envelope (spin-up → run → settle) with a **Model A + pocket-rattle** curve and a concave
+player-influence map, six segments spinning **overlapping & synced**, commit–reveal + future-block
+entropy now, VRF later with the pre-VRF path kept as a covert fallback (see `docs/SEGMENT_TABLES.md`
+§10). Next unblockers (spec §12 open items): the spin coefficient ranges (best against a simulator),
+settle-reconcile mechanics, and the standalone-`SegmentBoard` contract shape.
 
 ## License
 

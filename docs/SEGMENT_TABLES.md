@@ -367,18 +367,59 @@ the landing is fixed by `entropyᵢ`, so no swap sequence shifts *which* char la
 ### 10.2 The spin: velocity envelope (dealer strategy)
 
 The meter runs on a velocity envelope shaped by **player count** — the mechanical version of a dealer
-choosing a long or short spin:
+choosing a long or short spin. Player count never moves the **landing time** (the pick is fixed,
+§10.3); it shapes *how the ball gets there*: a busy table spins up fast, peaks high, and glides calm
+to the wire; a thin table rattles hard right up to the pick.
 
-- **Spin-up.** Swaps begin feeding the meter the moment a table meets its seat requirement
-  (`SEATS_MIN`, §9.2) — which can happen well before the entry cutoff. More players ⇒ the ball is spun
-  **sooner** and accelerates **harder** toward its running (jitter) velocity.
-- **Run.** Through the mid-spin the meter jitters at speed; swaps keep adding velocity/entropy. A
-  busy table spins faster and more erratically than a thin one.
-- **Decay & settle.** The same crowd that spun it up also settles it **sooner**: more players ⇒
-  earlier, steeper decay into the landing. A thin table spins lazily and drifts longer. The meter
-  self-settles onto a char and is reconciled against **TimbSettler** at the pick (§10.3).
+**Normalized spin clock.** Let `τ ∈ [0,1]` run from the spin-commit (40-min mark) to the pick
+(`τ=1`). The meter's velocity is **Model A** (logistic spin-up → glide-down) with a **pocket-rattle**
+overlay near the end:
 
-("Jitter speed" from earlier chats = this **running velocity**; the envelope is the spin curve.)
+```
+v(τ; n) = v_run(n) · R(τ; n) · G(τ; n) · [ 1 + rattle(τ) ]  +  swapPerturbation(τ)
+
+  R(τ; n) = 1 / (1 + e^(−k(n)·(τ − τ₀)))                     // logistic spin-up, τ₀ ≈ 0.1
+  G(τ; n) = 1                                        for τ < τ_s(n)   // running plateau
+          = resid(n) + (1−resid(n))·((1−τ)/(1−τ_s(n)))^γ   for τ ≥ τ_s(n)   // glide to the wire
+  rattle(τ) = β · e^(−ζ(τ−τ_r)) · cos(ω(τ−τ_r))   for τ > τ_r (≈0.9), else 0   // pocket bounce, β→0 at τ=1
+```
+
+- `R` — the spin-up: rises to the plateau at steepness `k(n)`.
+- `G` — the glide: flat until settle-onset `τ_s(n)`, then decays toward the **wire residual**
+  `resid(n)` (the jitter still visible at the pick before the lock).
+- `rattle` — cosmetic damped-cosine wobble in the last ~10% so the meter bounces between candidate
+  chars like a ball between frets; amplitude `β` decays to 0 exactly at the pick.
+- `swapPerturbation` — swap-driven jitter, scaled by the current envelope and **decaying through the
+  last 5 min** (§10.3). This is the only player-*action* input, and it moves `spinPath`, not the
+  landing (guard #2).
+
+At `τ=1` the meter locks to the entropy-selected char (§10.1) and reconciles with **TimbSettler**
+(§10.3).
+
+**Player → influence map (anchored at n=3).** Concave, so the low end is expressive:
+
+```
+p(n) = ln(n − 2) / ln(HARD − 2) ,  clamped to [0,1] ;  n = 2 clamps to the n=3 floor
+```
+
+A 2-seat table (`SEATS_MIN`, §9.2) spins at the **floor envelope**; the crowd effect begins at n=3.
+The four coefficients move off `p(n)` (directions confirmed; ranges are dials):
+
+| n | p(n) | `v_run` 0.5→1.0 | `τ_s` 0.85→0.55 | `resid` 0.15→0.02 | `k` 4→10 |
+|---|------|-----------------|-----------------|-------------------|----------|
+| 2 | — (floor) | 0.50 | 0.85 | 0.15 | 4.0 |
+| 3 | 0.00 | 0.50 | 0.85 (settles late) | 0.15 (rattles to wire) | 4.0 |
+| 4 | 0.30 | 0.65 | 0.76 | 0.11 | 5.8 |
+| 5 | 0.48 | 0.74 | 0.71 | 0.09 | 6.9 |
+| 6 | 0.60 | 0.80 | 0.67 | 0.07 | 7.6 |
+| 8 | 0.78 | 0.89 | 0.62 | 0.05 | 8.7 |
+| 12| 1.00 | 1.00 | 0.55 (settles early) | 0.02 (calm) | 10.0 |
+
+3→4 is the biggest single step; 8→12 barely moves — diminishing returns by design.
+
+**Where it runs.** The envelope is *display/velocity* dynamics only — the char is entropy-pinned
+(§10.1) — so the curve can live off-chain / in the frontend meter with just a `spinPath` summary
+committed for verification (§10.5). Not gas-bound, so the richer model is affordable.
 
 ### 10.3 Timing marks (per segment — all dials)
 
@@ -390,10 +431,13 @@ Measured within the segment window; candidate values are the user's:
 - **Bets close — last 5 min.** No new bets in the final 5 minutes. Swaps still land and add **large
   jitter**, but their influence **decays** approaching the 3 → 2 → 1-min marks.
 - **The pick — 1-min mark, +55s.** By the 1-min mark swap influence ≈ 0. **55 seconds later** (~5s
-  before end) the meter makes a **definitive pick**, displays it while settling, and cross-checks
-  TimbSettler; `Lᵢ` is that settle block.
-- **Six segments + Double-Digit.** How the six per-segment windows stagger or overlap, and DD
-  settling on the sixth pick, is an open cadence dial (§12).
+  before end) the meter makes a **definitive pick**, displays it while settling, and **reconciles with
+  TimbSettler** (not literal microseconds — SwapTables reads/settles relative to the TimbSettler
+  result in the settlement step); `Lᵢ` is that settle block.
+- **Six segments — overlapping & synced.** The six per-segment windows **run concurrently on the
+  same clock** (all share the entry / bets-close / pick marks), so a round is one ~segment-length
+  window with six balls spinning at once, not six in series. Double-Digit reads all six picks and
+  settles on the shared pick (§6.1).
 
 Because the char depends on `entropyᵢ` unknowable until `Lᵢ`, closing bets early isn't what stops
 sniping (nothing to snipe) — it keeps the last minute a pure settle with no new stakes landing on a
@@ -473,16 +517,16 @@ interface either way, so the VRF upgrade is a module swap, not a redesign.
 ## 12. Open items (not yet decided)
 
 - Exact **seed sizing** vs. Treasury runway (needs Treasury balance + TIMBS price).
-- **Spin-envelope dials** — the mechanism is specced (§10); still to set the actual numbers: the
-  40-min entry cutoff, the 5-min bets-close, the swap-influence decay curve into the 3-2-1-min marks,
-  and the 55s-after-1-min pick (§10.3) — plus the reveal window `W` and reveal-liveness **bond size**
-  (§10.4). Also the exact **player-count → envelope** function (how many players buy how much earlier
-  a spin-up / steeper decay, §10.2).
-- **Six-segment cadence** — whether the six per-segment windows run in sequence, overlap, or nest,
-  and how Double-Digit settles on the sixth pick (§10.3).
-- **Settle ordering vs. TimbSettler** — "reconcile microseconds behind TimbSettler" is the UX intent,
-  but L2 granularity is sub-second at best. Define the real ordering: does SwapTables read a settled
-  TimbSettler result in the same block, the next, or run independently and reconcile? (§10.2/§10.3).
+- **Spin-envelope tuning** — model, player map, and coefficient *directions* are locked (§10.2:
+  Model A + pocket-rattle, concave `p(n)` anchored at n=3). Still to finalize the actual **coefficient
+  ranges** (the `v_run`/`τ_s`/`resid`/`k` and rattle `β,ζ,ω` values), the swap-influence **decay
+  curve** into the 3-2-1-min marks, and the reveal window `W` + reveal-liveness **bond size** (§10.4).
+  Best done against a simulator once the meter is prototyped.
+- **`n=2` spin-eligibility** — a 2-seat table currently spins at the floor envelope (§10.2). Confirm
+  that vs. raising spin-eligibility to 3 (would need `SEATS_MIN` 2→3 in §9.2).
+- **Settle-reconcile mechanics** — ordering rule is decided (reconcile with TimbSettler, not
+  microseconds, §10.3). Still to pin the on-chain detail: same-block read of the TimbSettler result
+  vs. next-block, and the reorg-safety confirmations before the push-pay is final.
 - **Verifiability vs. covert fallback** — reconcile emitting enough to prove `charᵢ` fair against
   *not* surfacing a "fell back" flag (§10.5/§10.6).
 - **Contract shape** — extend TimbPrize/GameRegistry vs. a standalone `SegmentBoard` that reads
@@ -498,5 +542,5 @@ interface either way, so the VRF upgrade is a module swap, not a redesign.
   contract recipient that reverts could brick a whole pool's settlement. Need a **pull-claim
   fallback** (credit an in-contract balance if the push fails) so one griefing recipient can't DoS
   the table.
-- **L2 finality for real-time pay** — how many confirmations before a segment lock's push-pay is
-  treated as final (reorg safety vs. the "instant settlement" feel).
+
+(L2 finality / reorg-safety for the push-pay is folded into **Settle-reconcile mechanics** above.)
