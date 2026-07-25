@@ -1,0 +1,121 @@
+# SwapTables
+
+Pre-round **segment-betting tables** for [TimbSwap](https://github.com/0xTimberZx/TimbSwap) — a
+live, on-chain-settled game where players bet on the six characters of a round's winning string
+as they lock, one at a time, in real time. Self-funding **pari-mutuel** pools; no house promise
+beyond a bounded per-table seed; no insurance fund.
+
+Repo: `https://github.com/0xTimberZx/SwapTables`
+
+> This repo is the **app layer** (frontend + real-time backend + spec + prototype).
+> The on-chain `SegmentBoard` contract lives in the **[TimbSwap](https://github.com/0xTimberZx/TimbSwap)**
+> repo alongside the rest of the protocol (one Foundry project, one audit surface). This repo
+> only *consumes* its deployed address + ABI — see [`onchain/`](#onchain).
+
+---
+
+## Two rules that must never break (read first)
+
+1. **Seed, not answer.** A table is *seeded* from a previously recorded winning string, but the
+   actual locked characters stay **uncomputable from public data until each segment locks**.
+   A recorded string can never *be* the answer.
+2. **Velocity-only nudge.** Swaps nudge a meter's **speed/entropy, never its direction**. No
+   sequence of swaps can bias a segment toward a chosen character. Directional nudging = a
+   whale steers a segment onto its own bet = game over.
+
+Everything else is a dial. These two are invariants. Full rationale + the invariant checklist
+live in [`docs/SEGMENT_TABLES.md`](docs/SEGMENT_TABLES.md).
+
+---
+
+## How a table works (60-second version)
+
+- Hold an active Compete ticket → sit at a table → receive **six segment tokens** (one per
+  segment, unique, untradeable, redeemed every round), **issued per table**.
+- **Load all six** with TIMBS chips (5 / 10 / 25 / 50 / 100 / 500 / 1000; min 5), then
+  **place + approve** each on the board (final, no undo).
+- The table's six meters jitter and **lock one segment at a time**. Each lock **settles that
+  segment's pool pari-mutuel and push-pays winners in real time** — no waiting for the whole
+  round.
+- **Seven pools per table:** six segment pools + one round-wide **Double-Digit** pool (settles
+  on the sixth lock).
+- **Retire at six:** unplayed chips dislodge back to owners, leftovers sweep to Treasury, a new
+  table opens on a different seed string. ~40 tables can run in parallel; the UI shows 2.
+
+### Dials (current)
+
+| Dial | Value | Notes |
+|---|---|---|
+| `TABLE_SEED` | 100 TIMBS | seven-way split; the only house money at risk; boot condition |
+| `RAKE_BASE` | 5% | rake for a solo pool |
+| `RAKE_FLOOR` | 1.5% | `rake(n) = FLOOR + (BASE − FLOOR)/n`, n = distinct wallets in pool |
+| `TABLES_MAX` | 40 | expect 2–4 live |
+| tokens | per-table | six issued each time you sit down |
+| payouts | push | auto-credit on each segment lock (retire-at-six leaves nothing to claim) |
+
+---
+
+## Repo structure
+
+```
+SwapTables/
+├── README.md              ← you are here
+├── docs/
+│   └── SEGMENT_TABLES.md  ← spec of record (pool math, guards, invariants)
+├── prototype/
+│   └── board.html         ← interactive board demo (static, no backend; reports to DebugHub)
+├── app/                   ← game frontend (table views, board, live feed)          [empty]
+├── server/                ← real-time backend (meters, table lifecycle, settlement) [empty]
+├── debughub/
+│   └── index.html         ← same-origin local diagnostics dashboard (SwapTables)
+├── dev-docs/
+│   └── debughub-network/  ← DebugHub wiring notes + shared-table schema
+├── onchain/
+│   ├── addresses.js       ← deployed contract addresses (from TimbSwap/config.js)
+│   └── abi/               ← ABIs consumed from the TimbSwap Foundry build (TimbPrize, TIMBSToken)
+└── style.css              ← shared ecosystem stylesheet (used by the DebugHub dashboard)
+```
+
+- **`docs/SEGMENT_TABLES.md`** — the spec of record (mirrors `TimbSwap/dev-docs/`).
+- **`prototype/board.html`** — the interactive board demo; open it in a browser to play a round.
+- **`app/` + `server/`** — the two build surfaces this repo exists for (not started).
+- **`onchain/`** — the *only* coupling to TimbSwap: addresses + ABIs, no contract source.
+
+<a name="onchain"></a>
+## On-chain coupling
+
+The `SegmentBoard` contract is **not** in this repo. It is built, tested, and deployed from the
+TimbSwap Foundry project, and it reads settled segments from `TimbPrize`. This repo consumes:
+
+- **`onchain/addresses.js`** — network → `{ SegmentBoard, TimbPrize, TIMBSToken, ... }`.
+  Keep in sync with `TimbSwap/config.js` (single source of truth for deploys).
+- **`onchain/abi/*.json`** — copy the relevant ABIs out of the TimbSwap build artifacts on each
+  contract change. Do not hand-edit.
+
+If `SegmentBoard` ever diverges hard from the rest of the protocol, revisit whether the contract
+should move here too — until then, one Foundry project keeps the audit surface single.
+
+---
+
+## Telemetry (DebugHub)
+
+SwapTables reports to the shared **DebugHub** telemetry hub, same as the rest of
+the ecosystem. Pages set `window.DEBUGHUB_CONFIG` (`appName: "SwapTables"`) and
+load the SDK cross-origin from the MyDapp hub host; events go to a Supabase sink
+with a localStorage fallback. A same-origin local dashboard lives at
+[`debughub/`](debughub/index.html). Wiring + the shared-table schema are in
+[`dev-docs/debughub-network/`](dev-docs/debughub-network/README.md).
+
+> **One-time backend step:** `SwapTables` must be added to the DebugHub app
+> whitelist (RLS) before remote telemetry lands — see the schema note. Until then
+> the SDK falls back to localStorage and the local dashboard still works.
+
+## Status
+
+**Design → pre-implementation.** The mechanic is specced and prototyped; no contract or backend
+written yet. Next unblockers (from the spec's open items): the per-segment *bets-closed* cutoff,
+and confirming the standalone-`SegmentBoard`-in-TimbSwap contract shape.
+
+## License
+
+BUSL-1.1 (matches TimbSwap). Change Date 2029-07-25 → MIT. Trademark reserved.
