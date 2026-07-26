@@ -474,7 +474,7 @@ swapAmp(m) = a_run                                for m > 5      // open run: am
 ```
 
 with `a_peak ≫ a_run` — bets close with a **burst** of "huge" jitter that then decays under exponent
-`d` (default `d = 2`):
+`d` (**chosen: `d = 2`**; still a dial):
 
 | minutes left | 5 | 4 | 3 | 2 | 1 | pick (~0:05) |
 |---|---|---|---|---|---|---|
@@ -563,8 +563,8 @@ interface either way, so the VRF upgrade is a module swap, not a redesign.
 - **Spin-envelope tuning** — model + player map are locked, and a **provisional tuned baseline** is in
   the §10.2 table (flat `τ_s`, inverted `resid` — both confirmed intentional). Values stay open to
   re-feel against real play before final lock. The swap-influence **decay curve** is now specced
-  (§10.3, `d = 2` default); still to set its dials (`a_peak`, `a_run`, `d`) and the reveal window `W`
-  + reveal-liveness **bond size** (§10.4).
+  (§10.3, decay exponent `d = 2` chosen); still to set its amplitude dials (`a_peak`, `a_run`) and the
+  reveal window `W` + reveal-liveness **bond size** (§10.4).
 - **`n=2` spin-eligibility** — a 2-seat table currently spins at the floor envelope (§10.2). Confirm
   that vs. raising spin-eligibility to 3 (would need `SEATS_MIN` 2→3 in §9.2).
 - **Settle-reconcile mechanics** — ordering rule is decided (reconcile with TimbSettler, not
