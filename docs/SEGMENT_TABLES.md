@@ -555,6 +555,10 @@ interface either way, so the VRF upgrade is a module swap, not a redesign.
       detection grants no edge (§10.6).
 - [ ] **No new entries after the 40-min mark; no new bets in the last 5 min**; swap influence decays
       to ≈0 by the 1-min mark and the pick lands ~55s later (§10.3).
+- [ ] **Escrow is sacred:** neither guardian nor owner can reduce the escrow-backing balance below
+      `Σ(open pots + unsettled bets + unclaimed winnings)`. The guardian moves **no** funds; owner
+      withdrawals are capped to protocol-owned balance only; neither role can alter a settled outcome
+      or block a pull-claim (§13.2).
 
 ---
 
@@ -573,8 +577,9 @@ interface either way, so the VRF upgrade is a module swap, not a redesign.
   Still to pin: same-block vs. next-block read, and reorg-safety confirmations before push-pay is final.
 - **Verifiability vs. covert fallback** — reconcile emitting enough to prove `charᵢ` fair against
   *not* surfacing a "fell back" flag (§10.5/§10.6).
-- **Contract shape** — decided: standalone, **immutable**, four-module split, migrate-by-generation
-  (§13). Sub-decision open: **halt-only guardian vs. pure-immutable** (§13.2).
+- **Contract shape** — decided: standalone, **immutable**, four-module split, migrate-by-generation,
+  **halt-only guardian + owner protocol-fund moves** (escrow untouchable) (§13). Open sub-detail: a
+  **timelock** on owner fund-moves (§13.2).
 - **Swap-velocity data source** — the off-chain meter needs a TimbSwap Router/pair **Swap event or
   volume getter**; no Router ABI is vendored in this repo yet (only TimbPrize's `ScrollNudged`). Pull
   it from the TimbSwap Foundry build. Not a contract dependency (§13.1), only a frontend feed.
@@ -633,10 +638,21 @@ old one."
 - **Accepted cost** — on-chain economic dials (rake, band, seed policy, timing marks, Treasury) are
   fixed per generation; re-tuning them = a redeploy. Tolerable given short table life. Spin
   coefficients are off-chain (§10.2), so *those* re-tune freely with no redeploy.
-- **Safety within immutability (sub-decision):** recommend a **halt-only guardian** — can pause
-  *new-table-open* and *new-bets*, can **never** move funds or change an outcome; pull-claim (§13.3)
-  stays open so players can always exit. This keeps immutability's spirit (no behavior mutation, no
-  fund access) without being helpless on a discovered bug. Alternative: pure-immutable, no guardian.
+- **Safety within immutability (decided):** two limited, event-logged roles.
+  - **Guardian — halt only.** Can pause *new-table-open* and *new-bets*; can **never** move funds,
+    change an outcome, or block exits. Pull-claim (§13.3) stays open so players can always withdraw
+    even while halted.
+  - **Owner — protocol-fund moves only.** May move **protocol-owned balances** (accrued rake awaiting
+    Treasury sweep, uncommitted seed float, stray/rescued tokens, contract ETH not backing a pot) to
+    another contract — e.g. to seed a new generation or route to Treasury. **Hard boundary: the owner
+    can never touch player escrow.** Every owner withdrawal is capped on-chain so the escrow-backing
+    balance never drops below `Σ(open pots + unsettled bets + unclaimed winnings)` (§11). Player funds
+    are provably untouchable — that is what keeps conservation (§8/§11) credible.
+  - **Player funds never need cross-contract migration:** tables retire-at-six and old generations
+    drain, so stakes always settle out on the contract they were placed on. Owner fund-moves are
+    protocol ops, not pots.
+  - Recommend (open) a short **timelock** on owner fund-moves so they are observable before they
+    execute.
 
 ### 13.3 State & settlement — no unbounded loops
 
