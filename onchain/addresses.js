@@ -22,10 +22,11 @@ export const ADDRESSES = {
 // SegmentBoard is still pending deploy.
 //
 // When deploying SegmentBoard, wire it to the already-deployed pieces rather than
-// standing up new ones — pass the existing SeedRegistry as SEED_REGISTRY_ADDRESS,
-// and note the deployed PoolLedger's setBoard() is one-time: if it has already
-// been pointed at another board, that ledger cannot be reused and a fresh one
-// must be deployed alongside the new board.
+// standing up new ones. The deployed PoolLedger has NOT had setBoard() called yet,
+// so it is free to claim — but setBoard is one-time, so point it at the real board
+// and not a throwaway test deploy. Likewise pass the existing SeedRegistry as
+// SEED_REGISTRY_ADDRESS: it is shared across generations and must never be
+// redeployed, or the never-reuse guarantee silently resets.
 //
 // After deploy, two manual steps are required before play:
 //   1. TIMBS.setTransferWhitelist(PoolLedger, true)  — the LEDGER pays out, so it
