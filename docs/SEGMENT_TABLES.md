@@ -449,7 +449,7 @@ Measured within the segment window; candidate values are the user's:
   new entries**: the spin is locked in and the ball is committed to its envelope. (Seats can fill any
   time in this window; swaps start pushing velocity as soon as `SEATS_MIN` is met, §10.2.)
 - **Bets close — last 5 min.** No new bets in the final 5 minutes. Swaps still land and add **large
-  jitter**, but their influence **decays** approaching the 3 → 2 → 1-min marks.
+  jitter**, but their influence **decays** to nothing by the 1-min mark (curve below).
 - **The pick — 1-min mark, +55s.** By the 1-min mark swap influence ≈ 0. **55 seconds later** (~5s
   before end) the meter makes a **definitive pick**, displays it while settling, and **reconciles with
   TimbSettler** (not literal microseconds — SwapTables reads/settles relative to the TimbSettler
@@ -462,6 +462,29 @@ Measured within the segment window; candidate values are the user's:
 Because the char depends on `entropyᵢ` unknowable until `Lᵢ`, closing bets early isn't what stops
 sniping (nothing to snipe) — it keeps the last minute a pure settle with no new stakes landing on a
 ball already committed.
+
+**Swap-influence decay (the last 5 min).** After bets close, swaps keep landing but their pull on the
+meter fades to zero by the 1-min mark, so the finish reads clean. This is the amplitude term behind
+`swapPerturbation` (§10.2). Over minutes-remaining `m`:
+
+```
+swapAmp(m) = a_run                                for m > 5      // open run: ambient jitter
+           = a_peak · ( (m − 1) / (5 − 1) ) ^ d   for 1 ≤ m ≤ 5  // final window: huge → 0
+           = 0                                     for m < 1      // last ~minute: pure settle
+```
+
+with `a_peak ≫ a_run` — bets close with a **burst** of "huge" jitter that then decays under exponent
+`d` (default `d = 2`):
+
+| minutes left | 5 | 4 | 3 | 2 | 1 | pick (~0:05) |
+|---|---|---|---|---|---|---|
+| weight (d=2) | 1.00 | 0.56 | 0.25 | 0.06 | 0.00 | 0.00 |
+
+Front-loaded on purpose: a swap at the 4-min mark still shoves the meter hard, one at 2-min barely
+registers, and by 1-min swaps do nothing. **Why we can afford "huge":** the char is entropy-pinned
+(§10.1), so even a violent late swap *cannot* move the outcome (guard #2) — the burst is pure theatre,
+and the decay just makes sure the pick doesn't *look* swayed either. `t_close = 5 min`, `t_zero =
+1 min`, `a_peak`, `a_run`, and `d` are all dials.
 
 ### 10.4 Trigger & reveal-liveness
 
@@ -539,8 +562,9 @@ interface either way, so the VRF upgrade is a module swap, not a redesign.
 - Exact **seed sizing** vs. Treasury runway (needs Treasury balance + TIMBS price).
 - **Spin-envelope tuning** — model + player map are locked, and a **provisional tuned baseline** is in
   the §10.2 table (flat `τ_s`, inverted `resid` — both confirmed intentional). Values stay open to
-  re-feel against real play before final lock. Also still to set the swap-influence **decay curve**
-  into the 3-2-1-min marks and the reveal window `W` + reveal-liveness **bond size** (§10.4).
+  re-feel against real play before final lock. The swap-influence **decay curve** is now specced
+  (§10.3, `d = 2` default); still to set its dials (`a_peak`, `a_run`, `d`) and the reveal window `W`
+  + reveal-liveness **bond size** (§10.4).
 - **`n=2` spin-eligibility** — a 2-seat table currently spins at the floor envelope (§10.2). Confirm
   that vs. raising spin-eligibility to 3 (would need `SEATS_MIN` 2→3 in §9.2).
 - **Settle-reconcile mechanics** — ordering rule is decided (reconcile with TimbSettler, not
