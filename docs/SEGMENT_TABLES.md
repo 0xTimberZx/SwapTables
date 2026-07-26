@@ -566,6 +566,17 @@ interface either way, so the VRF upgrade is a module swap, not a redesign.
 
 ## 12. Open items (not yet decided)
 
+> **Generation 1 ran live on Arbitrum Sepolia** — a full round settled and the vault drained to
+> zero, confirming escrow conservation, the graduated rake and the §9 seed guard on real money.
+> Numbers and deployment findings: [`VALIDATION.md`](VALIDATION.md).
+
+- ~~**Abandon path for an under-seated table**~~ — **resolved.** Found in live testing: a table
+  that never reaches `SEATS_MIN` can never be armed (§10.3), so it would never lock or retire and
+  its loaded chips would be stranded. `cancelTable()` now closes it — permissionless past the
+  entry cutoff, refunds every chip and returns the seed. The deployed gen-1 board predates it.
+- **Seed funding is a pull, so the funder must be able to `approve`** — a treasury *contract*
+  usually cannot. Resolved in §13.1 by splitting `seedFunder` from `treasury`; noted here because
+  it is a deployment-time footgun, not just a code detail.
 - Exact **seed sizing** vs. Treasury runway (needs Treasury balance + TIMBS price).
 - **Spin-envelope tuning** — model + player map are locked, and a **provisional tuned baseline** is in
   the §10.2 table (flat `τ_s`, inverted `resid` — both confirmed intentional). Values stay open to
