@@ -115,17 +115,24 @@ with a localStorage fallback. A same-origin local dashboard lives at
 
 ## Status
 
-**Design → pre-implementation.** The mechanic is specced and prototyped; no contract or backend
-written yet. The segment lock is now specced as a **roulette-style spin** — a player-count-driven
-velocity envelope (spin-up → run → settle) with a **Model A + pocket-rattle** curve and a concave
-player-influence map, six segments spinning **overlapping & synced**, commit–reveal + future-block
-entropy now, VRF later with the pre-VRF path kept as a covert fallback (see `docs/SEGMENT_TABLES.md`
-§10). An interactive tuner for the spin curve lives at
-[`docs/tools/spin-tuner.html`](docs/tools/spin-tuner.html) (open in a browser). The contract shape
-is specced too — standalone, **immutable**, four-module split, migrate-by-generation, built in the
-TimbSwap Foundry repo (§13). Next unblockers (spec §12 open items): the spin coefficient/decay
-amplitude dials, the halt-only-guardian sub-decision, and the swap-velocity data source for the
-meter.
+**Contracts written; pre-deployment.** The mechanic is specced (`docs/SEGMENT_TABLES.md`) and the
+on-chain side is now **built and tested** in the TimbSwap Foundry repo — no backend yet.
+
+The segment lock is a **roulette-style spin**: a player-count-driven velocity envelope
+(spin-up → run → settle) with a **Model A + pocket-rattle** curve and a concave player-influence
+map, six segments spinning **overlapping & synced**, commit–reveal + future-block entropy now, VRF
+later with the pre-VRF path kept as a covert fallback (§10). An interactive tuner for the spin
+curve lives at [`docs/tools/spin-tuner.html`](docs/tools/spin-tuner.html) (open in a browser).
+
+**On-chain (in `0xTimberZx/TimbSwap`, per §13):** `SegmentBoard` (state machine + pari-mutuel
+settlement), `PoolLedger` (custody + credit ledger, escrow-sacred), `CommitRevealEntropy`
+(swappable for VRF), and the long-lived `SeedRegistry` (cross-generation seed never-reuse) —
+standalone, **immutable**, migrate-by-generation, with a halt-only guardian and renounceable owner.
+Deploy with `scripts/DeploySegmentBoard.s.sol`; addresses land in
+[`onchain/addresses.js`](onchain/addresses.js).
+
+Next unblockers: deploy a generation to Arbitrum Sepolia, build the frontend against it, and the
+remaining §12 dials (spin/decay amplitudes, swap-velocity data source for the meter).
 
 ## License
 
