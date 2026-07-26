@@ -422,13 +422,15 @@ Fixed dials (not n-varying): `τ₀ = 0.05`, `γ = 1.28`, rattle `β = 0.31 / ζ
 
 3→4 is the biggest single step; 8→12 barely moves — diminishing returns, by design.
 
-**Two shifts from the original directional guess, worth a conscious confirm (§12):**
-1. **`τ_s` is now nearly flat (~0.40 for all n)** — every ball settles early and glides the back
-   ~60% of the spin, regardless of crowd. The "busy settles *sooner*" lever is effectively off.
-2. **`resid` is inverted** — busy tables now carry *more* wire jitter (0.145) than thin ones (0.120).
-   So the crowd effect is carried by **peak speed** (`v_run` 0.55→1.20) and **wire liveliness**
-   (busy = faster and more alive at the pick; thin = slower and calmer) — the reverse of the earlier
-   "busy = calm at the wire" reading.
+**Two deliberate shifts from the original directional guess (confirmed intentional):**
+1. **`τ_s` is nearly flat (~0.40 for all n)** — every ball settles early and glides the back ~60% of
+   the spin, regardless of crowd. The "busy settles *sooner*" lever is intentionally off.
+2. **`resid` is inverted** — busy tables carry *more* wire jitter (0.145) than thin ones (0.120).
+   So the crowd effect is carried by **peak speed** (`v_run` 0.55→1.20) and **wire liveliness**:
+   busy = faster and more alive at the pick, thin = slower and calmer.
+
+These are a **provisional baseline** — accepted for now, to be re-felt against real play before final
+lock. The model and player map are settled; only these numeric values are open to revisit.
 
 **Where it runs.** The envelope is *display/velocity* dynamics only — the char is entropy-pinned
 (§10.1) — so the curve can live off-chain / in the frontend meter with just a `spinPath` summary
@@ -535,11 +537,10 @@ interface either way, so the VRF upgrade is a module swap, not a redesign.
 ## 12. Open items (not yet decided)
 
 - Exact **seed sizing** vs. Treasury runway (needs Treasury balance + TIMBS price).
-- **Spin-envelope tuning** — model + player map are locked, and a **first tuned pass** is now in the
-  §10.2 table (from the tuner). Two shifts in that pass need a conscious yes/no: (a) `τ_s` flattened
-  to ~0.40 for all n (busy no longer settles *sooner*), and (b) `resid` inverted (busy is *more* alive
-  at the wire, not calmer). Also still to set the swap-influence **decay curve** into the 3-2-1-min
-  marks and the reveal window `W` + reveal-liveness **bond size** (§10.4).
+- **Spin-envelope tuning** — model + player map are locked, and a **provisional tuned baseline** is in
+  the §10.2 table (flat `τ_s`, inverted `resid` — both confirmed intentional). Values stay open to
+  re-feel against real play before final lock. Also still to set the swap-influence **decay curve**
+  into the 3-2-1-min marks and the reveal window `W` + reveal-liveness **bond size** (§10.4).
 - **`n=2` spin-eligibility** — a 2-seat table currently spins at the floor envelope (§10.2). Confirm
   that vs. raising spin-eligibility to 3 (would need `SEATS_MIN` 2→3 in §9.2).
 - **Settle-reconcile mechanics** — ordering rule is decided (reconcile with TimbSettler, not
