@@ -394,8 +394,8 @@ v(τ; n) = v_run(n) · R(τ; n) · G(τ; n) · [ 1 + rattle(τ) ]  +  swapPertur
   last 5 min** (§10.3). This is the only player-*action* input, and it moves `spinPath`, not the
   landing (guard #2).
 
-At `τ=1` the meter locks to the entropy-selected char (§10.1) and reconciles with **TimbSettler**
-(§10.3).
+At `τ=1` the meter locks to the entropy-selected char (§10.1) and reconciles against **TimbPrize's
+settled result** (§10.3 / §13.4).
 
 **Player → influence map (anchored at n=3).** Concave, so the low end is expressive:
 
@@ -451,9 +451,10 @@ Measured within the segment window; candidate values are the user's:
 - **Bets close — last 5 min.** No new bets in the final 5 minutes. Swaps still land and add **large
   jitter**, but their influence **decays** to nothing by the 1-min mark (curve below).
 - **The pick — 1-min mark, +55s.** By the 1-min mark swap influence ≈ 0. **55 seconds later** (~5s
-  before end) the meter makes a **definitive pick**, displays it while settling, and **reconciles with
-  TimbSettler** (not literal microseconds — SwapTables reads/settles relative to the TimbSettler
-  result in the settlement step); `Lᵢ` is that settle block.
+  before end) the meter makes a **definitive pick**, displays it while settling, and **reconciles
+  against TimbPrize's settled result** — a pull-read (there is no separate `TimbSettler` contract and
+  no hook; "settler" is a role on TimbPrize, §13.4), not literal microseconds; `Lᵢ` is that settle
+  block.
 - **Six segments — overlapping & synced.** The six per-segment windows **run concurrently on the
   same clock** (all share the entry / bets-close / pick marks), so a round is one ~segment-length
   window with six balls spinning at once, not six in series. Double-Digit reads all six picks and
@@ -567,14 +568,16 @@ interface either way, so the VRF upgrade is a module swap, not a redesign.
   reveal window `W` + reveal-liveness **bond size** (§10.4).
 - **`n=2` spin-eligibility** — a 2-seat table currently spins at the floor envelope (§10.2). Confirm
   that vs. raising spin-eligibility to 3 (would need `SEATS_MIN` 2→3 in §9.2).
-- **Settle-reconcile mechanics** — ordering rule is decided (reconcile with TimbSettler, not
-  microseconds, §10.3). Still to pin the on-chain detail: same-block read of the TimbSettler result
-  vs. next-block, and the reorg-safety confirmations before the push-pay is final.
+- **Settle-reconcile mechanics** — approach is decided: SegmentBoard **pull-reads** TimbPrize's
+  settled result (no `TimbSettler` contract, no hook — §13.4), keeper sequences for a tight reconcile.
+  Still to pin: same-block vs. next-block read, and reorg-safety confirmations before push-pay is final.
 - **Verifiability vs. covert fallback** — reconcile emitting enough to prove `charᵢ` fair against
   *not* surfacing a "fell back" flag (§10.5/§10.6).
-- **Contract shape** — extend TimbPrize/GameRegistry vs. a standalone `SegmentBoard` that reads
-  settled segments from TimbPrize and owns chip escrow + pools + the lock logic of §10. (Leaning
-  standalone: 40×7 pools + per-table commits is a lot of state to bolt onto TimbPrize.)
+- **Contract shape** — decided: standalone, **immutable**, four-module split, migrate-by-generation
+  (§13). Sub-decision open: **halt-only guardian vs. pure-immutable** (§13.2).
+- **Swap-velocity data source** — the off-chain meter needs a TimbSwap Router/pair **Swap event or
+  volume getter**; no Router ABI is vendored in this repo yet (only TimbPrize's `ScrollNudged`). Pull
+  it from the TimbSwap Foundry build. Not a contract dependency (§13.1), only a frontend feed.
 - Whether Double-Digit's seed share rolls into segment pools if no DD bets exist.
 - **Seed-guard leftover mechanism** — the *threshold* is locked (`SEED_MIN_WALLETS = 2` per pool,
   §9). Still to confirm: a forfeited solo-pool seed share goes to **Treasury** (current default) vs.
@@ -587,3 +590,77 @@ interface either way, so the VRF upgrade is a module swap, not a redesign.
   the table.
 
 (L2 finality / reorg-safety for the push-pay is folded into **Settle-reconcile mechanics** above.)
+
+---
+
+## 13. Contract shape
+
+> **Where it's built.** This repo is the **app layer** — it vendors no Solidity. `SegmentBoard` and
+> its modules are built in the **TimbSwap Foundry project** (`0xTimberZx/TimbSwap`); this section is
+> the design of record. `onchain/addresses.js` carries `SegmentBoard = 0x0` until first deploy.
+> Chain: **Arbitrum Sepolia (421614)**.
+
+### 13.1 Modules — split for auditability
+
+Four pieces, not a monolith, so the money-safety surface can be audited in isolation:
+
+- **`SegmentBoard`** (core) — table lifecycle, seats, per-segment commit/reveal, the pick,
+  retire-at-six, settlement orchestration. The state machine.
+- **`PoolLedger`** — chip escrow, the 7 pools per table, pari-mutuel math, rake, conservation. Every
+  money invariant in §11 must be verifiable against *this contract alone*.
+- **`IEntropy`** — pluggable entropy. `CommitRevealEntropy` now; `HybridEntropy` (VRF with the silent
+  block-hash fallback, §10.6) later. The covert fallback lives **inside** the module, so it's never a
+  contract swap.
+- **`ISeedSource`** — thin adapter over TimbPrize; reads a settled `bytes6` winning string and
+  enforces never-reuse (§13.4).
+
+**No on-chain swap coupling.** The velocity envelope is display-only and the char is entropy-pinned
+(§10.2), so swap flow is a **frontend** input to the meter, not a contract dependency. `SegmentBoard`
+on-chain needs only entropy + seed + pools + settle.
+
+### 13.2 Immutable, migrate-by-generation
+
+No proxies; logic and on-chain params are fixed at deploy. Upgrades — VRF (§10.6), re-tuned economics
+— ship as a **new generation**: a fresh deploy that new tables open on, while old tables **drain**.
+
+**Why immutability is cheap here:** tables **retire at six** (§7) — there is no long-lived per-table
+state to migrate. A new generation just becomes the target for new tables; the frontend re-points and
+old tables finish on the old contract. Short table life turns "migration" into "stop opening on the
+old one."
+
+- **Covert fallback survives immutability** — it's intra-module (inside `HybridEntropy`), not a
+  contract swap, so nothing about the generation model exposes it.
+- **Accepted cost** — on-chain economic dials (rake, band, seed policy, timing marks, Treasury) are
+  fixed per generation; re-tuning them = a redeploy. Tolerable given short table life. Spin
+  coefficients are off-chain (§10.2), so *those* re-tune freely with no redeploy.
+- **Safety within immutability (sub-decision):** recommend a **halt-only guardian** — can pause
+  *new-table-open* and *new-bets*, can **never** move funds or change an outcome; pull-claim (§13.3)
+  stays open so players can always exit. This keeps immutability's spirit (no behavior mutation, no
+  fund access) without being helpless on a discovered bug. Alternative: pure-immutable, no guardian.
+
+### 13.3 State & settlement — no unbounded loops
+
+- **Keyed mappings only:** `tableId → segment → pool → better`. No iteration over seats or pools in
+  any settle path (§11).
+- **Push-pay per segment lock**, bounded to that one pool's winners, with a **pull-claim fallback**
+  if a push reverts (§7, §11) — one griefing recipient can't DoS the table, and nothing stays
+  claimable at retire on the happy path.
+- **Permissionless `settleSegment`:** reads entropy at `Lᵢ`, pulls TimbPrize's settled result
+  (§13.4), reverts if that round isn't settled yet. A keeper sequences both calls when it wants them
+  tight (§10.3) — no hook, no privileged settler on our side.
+- **Pack the hot seat struct** (pool id, amount, wallet, flags) into minimal storage slots — written
+  ~3k×/round across 40 tables.
+
+### 13.4 Seed & reconcile — real TimbPrize binding
+
+TimbPrize is itself a 6-position `bytes6` segment engine; we consume its results, we don't extend it.
+
+- **Seed:** `ISeedSource.readSeed(round) → bytes6`, backed by TimbPrize `roundWinningString(round)` /
+  `getRoundResult(round)`. Require the round settled (mirror TimbPrize's `RoundNotSettled` guard), then
+  mark it **used** so no string is ever reused (§10.1). `bytes6` is exactly our six-char format.
+- **Reconcile:** there is **no `TimbSettler` contract** and **no callback/hook** — "settler" is a
+  *role* on TimbPrize and settlement is its `settleSegment()`. So SegmentBoard **pull-reads** the
+  settled result; a same-block reconcile is just a keeper sequencing both calls in one tx.
+- **Cross-generation uniqueness:** to keep never-reuse across immutable generations, the used-round
+  registry lives in a small **append-only `SeedRegistry`** (authorized writers = deployed generations)
+  that outlives any single generation — the one shared, long-lived piece of state.

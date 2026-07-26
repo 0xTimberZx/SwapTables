@@ -121,9 +121,11 @@ velocity envelope (spin-up → run → settle) with a **Model A + pocket-rattle*
 player-influence map, six segments spinning **overlapping & synced**, commit–reveal + future-block
 entropy now, VRF later with the pre-VRF path kept as a covert fallback (see `docs/SEGMENT_TABLES.md`
 §10). An interactive tuner for the spin curve lives at
-[`docs/tools/spin-tuner.html`](docs/tools/spin-tuner.html) (open in a browser). Next unblockers
-(spec §12 open items): the spin coefficient ranges (tune against the simulator), settle-reconcile
-mechanics, and the standalone-`SegmentBoard` contract shape.
+[`docs/tools/spin-tuner.html`](docs/tools/spin-tuner.html) (open in a browser). The contract shape
+is specced too — standalone, **immutable**, four-module split, migrate-by-generation, built in the
+TimbSwap Foundry repo (§13). Next unblockers (spec §12 open items): the spin coefficient/decay
+amplitude dials, the halt-only-guardian sub-decision, and the swap-velocity data source for the
+meter.
 
 ## License
 
