@@ -115,24 +115,31 @@ with a localStorage fallback. A same-origin local dashboard lives at
 
 ## Status
 
-**Contracts written; pre-deployment.** The mechanic is specced (`docs/SEGMENT_TABLES.md`) and the
-on-chain side is now **built and tested** in the TimbSwap Foundry repo — no backend yet.
+**Live on Arbitrum Sepolia.** The mechanic is specced (`docs/SEGMENT_TABLES.md`), the
+contracts are built and tested in the TimbSwap Foundry repo, and **generation 1 has run a
+complete round end-to-end on testnet** — open → seat → load → place → arm → six locks →
+retire → withdraw, with the vault draining to exactly zero. Full record, including the
+per-pool numbers and what deployment taught us, in [`docs/VALIDATION.md`](docs/VALIDATION.md).
 
 The segment lock is a **roulette-style spin**: a player-count-driven velocity envelope
-(spin-up → run → settle) with a **Model A + pocket-rattle** curve and a concave player-influence
-map, six segments spinning **overlapping & synced**, commit–reveal + future-block entropy now, VRF
-later with the pre-VRF path kept as a covert fallback (§10). An interactive tuner for the spin
-curve lives at [`docs/tools/spin-tuner.html`](docs/tools/spin-tuner.html) (open in a browser).
+(spin-up → run → settle) with a **Model A + pocket-rattle** curve and a concave
+player-influence map, six segments spinning **overlapping & synced**, commit–reveal +
+future-block entropy now, VRF later with the pre-VRF path kept as a covert fallback (§10).
+An interactive tuner for the spin curve lives at
+[`docs/tools/spin-tuner.html`](docs/tools/spin-tuner.html) (open in a browser).
 
-**On-chain (in `0xTimberZx/TimbSwap`, per §13):** `SegmentBoard` (state machine + pari-mutuel
-settlement), `PoolLedger` (custody + credit ledger, escrow-sacred), `CommitRevealEntropy`
-(swappable for VRF), and the long-lived `SeedRegistry` (cross-generation seed never-reuse) —
-standalone, **immutable**, migrate-by-generation, with a halt-only guardian and renounceable owner.
-Deploy with `scripts/DeploySegmentBoard.s.sol`; addresses land in
+**On-chain (in `0xTimberZx/TimbSwap`, per §13):** `SegmentBoard` (state machine +
+pari-mutuel settlement), `PoolLedger` (custody + credit ledger, escrow-sacred),
+`CommitRevealEntropy` (swappable for VRF), and the long-lived `SeedRegistry`
+(cross-generation seed never-reuse) — standalone, **immutable**, migrate-by-generation,
+with a halt-only guardian and renounceable owner. Addresses in
 [`onchain/addresses.js`](onchain/addresses.js).
 
-Next unblockers: deploy a generation to Arbitrum Sepolia, build the frontend against it, and the
-remaining §12 dials (spin/decay amplitudes, swap-velocity data source for the meter).
+Live-validated on real money: escrow conservation (`heldBalance == totalCredited`), the
+graduated rake (4.87% at two wallets vs 8% solo), and the §9 seed guard (a solo pool draws
+no seed share). Next: the frontend against the live board, plus the open items in
+`docs/VALIDATION.md` — an abandon path for under-seated tables, Double-Digit, and
+near-capacity gas.
 
 ## License
 
