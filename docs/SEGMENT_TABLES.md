@@ -570,11 +570,10 @@ interface either way, so the VRF upgrade is a module swap, not a redesign.
 > zero, confirming escrow conservation, the graduated rake and the §9 seed guard on real money.
 > Numbers and deployment findings: [`VALIDATION.md`](VALIDATION.md).
 
-- **Abandon path for an under-seated table** (found in live testing). A table that never reaches
-  `SEATS_MIN` cannot be armed (§10.3) → never locks → never retires, so any chips already loaded
-  are stranded; only the seed is recoverable (`ownerWithdraw`). Needs a permissionless cancel for
-  a table past its entry cutoff with `seatCount < SEATS_MIN`, refunding chips and returning the
-  seed. **This is the one known way player funds can be stuck.**
+- ~~**Abandon path for an under-seated table**~~ — **resolved.** Found in live testing: a table
+  that never reaches `SEATS_MIN` can never be armed (§10.3), so it would never lock or retire and
+  its loaded chips would be stranded. `cancelTable()` now closes it — permissionless past the
+  entry cutoff, refunds every chip and returns the seed. The deployed gen-1 board predates it.
 - **Seed funding is a pull, so the funder must be able to `approve`** — a treasury *contract*
   usually cannot. Resolved in §13.1 by splitting `seedFunder` from `treasury`; noted here because
   it is a deployment-time footgun, not just a code detail.

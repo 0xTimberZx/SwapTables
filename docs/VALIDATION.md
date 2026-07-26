@@ -134,16 +134,22 @@ loop blew the 16-slot limit there.
 
 **Fixed:** stack pressure reduced so the contract builds under both.
 
+### 7. A table that never fills would strand its chips
+The run made the failure mode concrete: a table below `SEATS_MIN` can never be
+armed, so it never locks, never retires, and any chips already loaded are stuck.
+Only the seed was recoverable (`ownerWithdraw`). This was the single known way
+player funds could stick.
+
+**Fixed:** `cancelTable()` — permissionless once a table is past its entry cutoff
+with too few seats. Refunds **every** chip, placed or not (no char was ever locked,
+so nothing can have won or lost), then returns the seed to the treasury. The
+deployed generation-1 board predates this and does not have it.
+
 ---
 
 # Still open
 
-- **No abandon path for an under-seated table.** A table that never reaches
-  `SEATS_MIN` cannot be armed → never locks → never retires, stranding any chips
-  already loaded (the seed itself is recoverable via `ownerWithdraw`). Generation 2
-  should let anyone cancel a table past its entry cutoff with `seatCount <
-  SEATS_MIN`, refunding chips and returning the seed.
-- **Double-Digit is untested** — no DD bets were placed in this run.
+- **Double-Digit is untested on-chain** — no DD bets were placed in this run.
 - **Fallback path untested on-chain** — every segment settled via the happy
   reveal path. `lockSegmentFallback` is covered by tests but has not run live.
 - **Multi-table and near-capacity behaviour untested** — one table, two seats.
