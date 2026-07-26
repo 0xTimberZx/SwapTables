@@ -164,6 +164,13 @@
   .table-actions { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
   .toast { font-size: .74rem; color: var(--brass); opacity: 0; transition: opacity .2s; }
   .toast.show { opacity: 1; }
+  #copyOut {
+    width: 100%; margin-top: 12px; min-height: 150px; resize: vertical;
+    font-family: var(--font-mono); font-size: .72rem; line-height: 1.45;
+    color: var(--ink); background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 8px; padding: 10px; white-space: pre; overflow-x: auto;
+  }
+  #copyOut:focus-visible { outline: 2px solid var(--brass-bright); outline-offset: 1px; }
 
   .footnote { color: var(--ink-faint); font-size: .72rem; margin-top: 22px; max-width: 72ch; }
   .footnote code { color: var(--ink-soft); }
@@ -230,6 +237,8 @@
         <button class="btn" id="copyBtn">Copy for spec</button>
         <span class="toast" id="toast">Copied — paste into §10.2</span>
       </div>
+      <textarea id="copyOut" hidden readonly spellcheck="false"
+        aria-label="Spec markdown — select all and copy"></textarea>
     </div>
   </div>
 
@@ -252,32 +261,32 @@
 
   // ---- coefficient dials (defaults reproduce the spec §10.2 table) ----
   const DEFAULTS = {
-    vrunMin: 0.50, vrunMax: 1.00,
-    tsLate: 0.85,  tsEarly: 0.55,
-    residMax: 0.15, residMin: 0.02,
-    kMin: 4.0, kMax: 10.0,
-    tau0: 0.10, gamma: 1.6,
-    rattleBeta: 0.18, rattleZeta: 6.0, rattleOmega: 40.0, tauR: 0.90,
-    swapNoise: 0.05
+    vrunMin: 0.55, vrunMax: 1.20,
+    tsLate: 0.40,  tsEarly: 0.39,
+    residMax: 0.120, residMin: 0.145,
+    kMin: 12.0, kMax: 16.0,
+    tau0: 0.05, gamma: 1.28,
+    rattleBeta: 0.31, rattleZeta: 3.5, rattleOmega: 10.0, tauR: 0.72,
+    swapNoise: 0.21
   };
   let D = Object.assign({}, DEFAULTS);
 
   const SLIDER_DEFS = [
     { group: "Velocity", items: [
-      ["vrunMin", "v_run @ n=3", 0.2, 1.0, 0.01],
-      ["vrunMax", "v_run @ HARD", 0.5, 1.2, 0.01],
-      ["kMin", "spin-up k @ n=3", 2, 12, 0.1],
-      ["kMax", "spin-up k @ HARD", 2, 16, 0.1],
+      ["vrunMin", "v_run @ n=3", 0.2, 1.2, 0.01],
+      ["vrunMax", "v_run @ HARD", 0.5, 1.5, 0.01],
+      ["kMin", "spin-up k @ n=3", 2, 18, 0.1],
+      ["kMax", "spin-up k @ HARD", 2, 22, 0.1],
     ]},
     { group: "Timing", items: [
-      ["tsLate", "settle-onset τ_s @ n=3", 0.4, 0.95, 0.01],
+      ["tsLate", "settle-onset τ_s @ n=3", 0.3, 0.95, 0.01],
       ["tsEarly", "settle-onset τ_s @ HARD", 0.3, 0.9, 0.01],
       ["tau0", "spin-up midpoint τ₀", 0.0, 0.4, 0.01],
       ["gamma", "glide exponent γ", 0.6, 3.5, 0.05],
     ]},
     { group: "Pocket rattle", items: [
       ["residMax", "wire jitter @ n=3", 0.0, 0.3, 0.005],
-      ["residMin", "wire jitter @ HARD", 0.0, 0.15, 0.005],
+      ["residMin", "wire jitter @ HARD", 0.0, 0.3, 0.005],
       ["rattleBeta", "rattle depth β", 0.0, 0.5, 0.01],
       ["rattleZeta", "rattle damping ζ", 1, 14, 0.5],
       ["rattleOmega", "rattle freq ω", 10, 80, 1],
@@ -577,22 +586,36 @@
   });
 
   // ---- copy ----
-  document.getElementById('copyBtn').addEventListener('click', () => {
+  function specMarkdown() {
     const rows = [2, 3, 4, 5, 6, 8, 12].map(n => {
       const c = coeff(n); const floor = n === 2;
       return `| ${n}${floor ? ' (floor)' : ''} | ${floor ? '—' : c.p.toFixed(2)} | ${c.vrun.toFixed(2)} | ${c.ts.toFixed(2)} | ${c.resid.toFixed(3)} | ${c.k.toFixed(1)} |`;
     }).join('\n');
     const dials = Object.entries(D).map(([k, v]) => `${k} = ${v}`).join(', ');
-    const md =
-`| n | p(n) | v_run | τ_s | resid | k |
+    return `| n | p(n) | v_run | τ_s | resid | k |
 |---|------|-------|-----|-------|---|
 ${rows}
 
 dials: ${dials}`;
-    navigator.clipboard.writeText(md).then(() => {
-      const t = document.getElementById('toast'); t.classList.add('show');
-      setTimeout(() => t.classList.remove('show'), 1800);
-    });
+  }
+  function showToast(msg) {
+    const t = document.getElementById('toast'); t.textContent = msg;
+    t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2400);
+  }
+  document.getElementById('copyBtn').addEventListener('click', () => {
+    const md = specMarkdown();
+    // Always reveal a selectable box — clipboard API is often blocked in sandboxed frames.
+    const ta = document.getElementById('copyOut');
+    ta.hidden = false; ta.value = md; ta.focus(); ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(md)
+        .then(() => showToast('Copied to clipboard ✓'))
+        .catch(() => showToast(ok ? 'Copied ✓' : 'Select the text below & copy'));
+    } else {
+      showToast(ok ? 'Copied ✓' : 'Select the text below & copy');
+    }
   });
 
   // ---- theme re-render (colors are read from CSS vars) ----

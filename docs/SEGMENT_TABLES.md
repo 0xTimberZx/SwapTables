@@ -367,9 +367,10 @@ the landing is fixed by `entropyᵢ`, so no swap sequence shifts *which* char la
 ### 10.2 The spin: velocity envelope (dealer strategy)
 
 The meter runs on a velocity envelope shaped by **player count** — the mechanical version of a dealer
-choosing a long or short spin. Player count never moves the **landing time** (the pick is fixed,
-§10.3); it shapes *how the ball gets there*: a busy table spins up fast, peaks high, and glides calm
-to the wire; a thin table rattles hard right up to the pick.
+choosing how hard to spin. Player count never moves the **landing time** (the pick is fixed, §10.3);
+it shapes *how the ball gets there*. Under the current tuned values (see table below) a busy table
+spins up hard and fast, and stays lively — faster and more jittery — right to the wire; a thin table
+is slower and calmer into a pick that lands at the same instant for both.
 
 **Normalized spin clock.** Let `τ ∈ [0,1]` run from the spin-commit (40-min mark) to the pick
 (`τ=1`). The meter's velocity is **Model A** (logistic spin-up → glide-down) with a **pocket-rattle**
@@ -403,19 +404,31 @@ p(n) = ln(n − 2) / ln(HARD − 2) ,  clamped to [0,1] ;  n = 2 clamps to the n
 ```
 
 A 2-seat table (`SEATS_MIN`, §9.2) spins at the **floor envelope**; the crowd effect begins at n=3.
-The four coefficients move off `p(n)` (directions confirmed; ranges are dials):
+The four coefficients move off `p(n)`. **Values below are the first tuned pass from the tuner
+(§10.2 tool), superseding the original directional guesses:**
 
-| n | p(n) | `v_run` 0.5→1.0 | `τ_s` 0.85→0.55 | `resid` 0.15→0.02 | `k` 4→10 |
-|---|------|-----------------|-----------------|-------------------|----------|
-| 2 | — (floor) | 0.50 | 0.85 | 0.15 | 4.0 |
-| 3 | 0.00 | 0.50 | 0.85 (settles late) | 0.15 (rattles to wire) | 4.0 |
-| 4 | 0.30 | 0.65 | 0.76 | 0.11 | 5.8 |
-| 5 | 0.48 | 0.74 | 0.71 | 0.09 | 6.9 |
-| 6 | 0.60 | 0.80 | 0.67 | 0.07 | 7.6 |
-| 8 | 0.78 | 0.89 | 0.62 | 0.05 | 8.7 |
-| 12| 1.00 | 1.00 | 0.55 (settles early) | 0.02 (calm) | 10.0 |
+| n | p(n) | `v_run` 0.55→1.20 | `τ_s` 0.40→0.39 | `resid` 0.120→0.145 | `k` 12→16 |
+|---|------|-------------------|-----------------|---------------------|-----------|
+| 2 | — (floor) | 0.55 | 0.40 | 0.120 | 12.0 |
+| 3 | 0.00 | 0.55 | 0.40 | 0.120 | 12.0 |
+| 4 | 0.30 | 0.75 | 0.40 | 0.128 | 13.2 |
+| 5 | 0.48 | 0.86 | 0.40 | 0.132 | 13.9 |
+| 6 | 0.60 | 0.94 | 0.39 | 0.135 | 14.4 |
+| 8 | 0.78 | 1.06 | 0.39 | 0.139 | 15.1 |
+| 12| 1.00 | 1.20 | 0.39 | 0.145 | 16.0 |
 
-3→4 is the biggest single step; 8→12 barely moves — diminishing returns by design.
+Fixed dials (not n-varying): `τ₀ = 0.05`, `γ = 1.28`, rattle `β = 0.31 / ζ = 3.5 / ω = 10 / τ_r =
+0.72`, swap-noise `= 0.21` (reels only).
+
+3→4 is the biggest single step; 8→12 barely moves — diminishing returns, by design.
+
+**Two shifts from the original directional guess, worth a conscious confirm (§12):**
+1. **`τ_s` is now nearly flat (~0.40 for all n)** — every ball settles early and glides the back
+   ~60% of the spin, regardless of crowd. The "busy settles *sooner*" lever is effectively off.
+2. **`resid` is inverted** — busy tables now carry *more* wire jitter (0.145) than thin ones (0.120).
+   So the crowd effect is carried by **peak speed** (`v_run` 0.55→1.20) and **wire liveliness**
+   (busy = faster and more alive at the pick; thin = slower and calmer) — the reverse of the earlier
+   "busy = calm at the wire" reading.
 
 **Where it runs.** The envelope is *display/velocity* dynamics only — the char is entropy-pinned
 (§10.1) — so the curve can live off-chain / in the frontend meter with just a `spinPath` summary
@@ -522,11 +535,11 @@ interface either way, so the VRF upgrade is a module swap, not a redesign.
 ## 12. Open items (not yet decided)
 
 - Exact **seed sizing** vs. Treasury runway (needs Treasury balance + TIMBS price).
-- **Spin-envelope tuning** — model, player map, and coefficient *directions* are locked (§10.2:
-  Model A + pocket-rattle, concave `p(n)` anchored at n=3). Still to finalize the actual **coefficient
-  ranges** (the `v_run`/`τ_s`/`resid`/`k` and rattle `β,ζ,ω` values), the swap-influence **decay
-  curve** into the 3-2-1-min marks, and the reveal window `W` + reveal-liveness **bond size** (§10.4).
-  Best done against a simulator once the meter is prototyped.
+- **Spin-envelope tuning** — model + player map are locked, and a **first tuned pass** is now in the
+  §10.2 table (from the tuner). Two shifts in that pass need a conscious yes/no: (a) `τ_s` flattened
+  to ~0.40 for all n (busy no longer settles *sooner*), and (b) `resid` inverted (busy is *more* alive
+  at the wire, not calmer). Also still to set the swap-influence **decay curve** into the 3-2-1-min
+  marks and the reveal window `W` + reveal-liveness **bond size** (§10.4).
 - **`n=2` spin-eligibility** — a 2-seat table currently spins at the floor envelope (§10.2). Confirm
   that vs. raising spin-eligibility to 3 (would need `SEATS_MIN` 2→3 in §9.2).
 - **Settle-reconcile mechanics** — ordering rule is decided (reconcile with TimbSettler, not
