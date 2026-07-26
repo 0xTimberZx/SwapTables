@@ -47,9 +47,12 @@ live in [`docs/SEGMENT_TABLES.md`](docs/SEGMENT_TABLES.md).
 | Dial | Value | Notes |
 |---|---|---|
 | `TABLE_SEED` | 100 TIMBS | seven-way split; the only house money at risk; boot condition |
-| `RAKE_BASE` | 5% | rake for a solo pool |
-| `RAKE_FLOOR` | 1.5% | `rake(n) = FLOOR + (BASE − FLOOR)/n`, n = distinct wallets in pool |
+| `RAKE_BASE` | 8% | rake for a solo pool |
+| `RAKE_FLOOR` | 1.75% | `rake(n) = FLOOR + (BASE − FLOOR)/n`, n = distinct wallets in pool (2 wallets → 4.88%) |
 | `TABLES_MAX` | 40 | expect 2–4 live |
+| `SEATS` | min 2 · target 4 · soft 8 · hard 12 | no solo tables; hard cap is gas-bound, not chain-bound |
+| `SEED_MIN_WALLETS` | 2 | a pool draws its seed share only with ≥2 distinct wallets (anti-farm) |
+| tables / wallet | uncapped | gated only by an active ticket |
 | tokens | per-table | six issued each time you sit down |
 | payouts | push | auto-credit on each segment lock (retire-at-six leaves nothing to claim) |
 
@@ -113,8 +116,16 @@ with a localStorage fallback. A same-origin local dashboard lives at
 ## Status
 
 **Design → pre-implementation.** The mechanic is specced and prototyped; no contract or backend
-written yet. Next unblockers (from the spec's open items): the per-segment *bets-closed* cutoff,
-and confirming the standalone-`SegmentBoard`-in-TimbSwap contract shape.
+written yet. The segment lock is now specced as a **roulette-style spin** — a player-count-driven
+velocity envelope (spin-up → run → settle) with a **Model A + pocket-rattle** curve and a concave
+player-influence map, six segments spinning **overlapping & synced**, commit–reveal + future-block
+entropy now, VRF later with the pre-VRF path kept as a covert fallback (see `docs/SEGMENT_TABLES.md`
+§10). An interactive tuner for the spin curve lives at
+[`docs/tools/spin-tuner.html`](docs/tools/spin-tuner.html) (open in a browser). The contract shape
+is specced too — standalone, **immutable**, four-module split, migrate-by-generation, built in the
+TimbSwap Foundry repo (§13). Next unblockers (spec §12 open items): the spin coefficient/decay
+amplitude dials, the halt-only-guardian sub-decision, and the swap-velocity data source for the
+meter.
 
 ## License
 
