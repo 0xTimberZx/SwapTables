@@ -1,40 +1,63 @@
 // Deployed contract addresses consumed from the TimbSwap protocol.
 // Single source of truth: TimbSwap/config.js — keep this file in sync on every deploy.
-// SegmentBoard is deployed from the TimbSwap Foundry project (not this repo).
+// The SegmentBoard contracts are deployed from the TimbSwap Foundry project (not this repo).
 
 export const ADDRESSES = {
   arbitrumSepolia: {
     chainId: 421614,
-    SegmentBoard: "0x0000000000000000000000000000000000000000", // TODO: not yet deployed — see note below
-    PoolLedger:   "0x4BBCb72e695C24e175982354fFBD86Cc25695bF5", // custodies chips; pays winners
+
+    // ── SwapTables board, generation 1 (live) ──────────────────────────────
+    SegmentBoard: "0x25D47477f7bf912791B9a6033d810283f33bF13D", // state machine + pari-mutuel settlement
+    PoolLedger:   "0xf3686b4E86e2b21FaDF36FE43b87EAF9D35FE409", // custodies chips; credits + pays winners
     SeedRegistry: "0x2460C8ed63414F36838542982A5Ab263C9Fcb914", // long-lived ACROSS generations — never redeploy
     CommitRevealEntropy: "0x3280249A9935D1858B9c8A1573a1C81a2f4132A5", // swappable for VRF later
-    TimbPrize:    "0x35976f4D2260127848a6274D2eC89ee054412432", // from TimbSwap/config.js — re-pointed to GameRegistry v5
-    TIMBSToken:   "0x2Aaa61E2c08Ff61c93E960EcCd5Dd7fedF0bfaAa", // from TimbSwap/config.js
-    TimbTreasury: "0xd3F40042aFA8074EA68C9f61dE6aDADD539F0D5c", // from TimbSwap/config.js — v4 treasury
+
+    // ── TimbSwap protocol ──────────────────────────────────────────────────
+    TimbPrize:    "0x35976f4D2260127848a6274D2eC89ee054412432", // seed source — re-pointed to GameRegistry v5
+    TIMBSToken:   "0x2Aaa61E2c08Ff61c93E960EcCd5Dd7fedF0bfaAa",
+    TimbTreasury: "0xd3F40042aFA8074EA68C9f61dE6aDADD539F0D5c", // v4 treasury — receives sweeps
     // add others (Router, PrizeEscrow, ...) as the app needs them
   },
 };
 
-// Addresses above are copied verbatim from TimbSwap/config.js (Arbitrum Sepolia).
+// ── Roles on the live board ────────────────────────────────────────────────
 //
-// PoolLedger, SeedRegistry and CommitRevealEntropy are DEPLOYED (above).
-// SegmentBoard is still pending deploy.
+// treasury   = TimbTreasury (0xd3F4…0D5c) — sweeps are PUSHED here at retire.
+// seedFunder = an ops EOA                 — the seed is PULLED from here.
 //
-// When deploying SegmentBoard, wire it to the already-deployed pieces rather than
-// standing up new ones. The deployed PoolLedger has NOT had setBoard() called yet,
-// so it is free to claim — but setBoard is one-time, so point it at the real board
-// and not a throwaway test deploy. Likewise pass the existing SeedRegistry as
-// SEED_REGISTRY_ADDRESS: it is shared across generations and must never be
-// redeployed, or the never-reuse guarantee silently resets.
+// These are deliberately different addresses. Funding a table is a transferFrom,
+// so the funder must be able to call approve() — which TimbTreasury cannot do (it
+// has no generic approve, only internal router approvals for liquidity ops). A
+// board pointed at the treasury for BOTH reverts on every openTable, permanently,
+// because treasury is immutable. Generation 0 was retired for exactly this.
+// seedFunder is owner-settable, so the ops wallet can be rotated without a
+// redeploy; it can never reach player escrow.
+
+// ── Retired — do not wire anything to these ────────────────────────────────
+export const RETIRED = {
+  arbitrumSepolia: {
+    // gen 0: treasury was also the seed funder, so openTable could never fund.
+    SegmentBoard: "0xD1ba5099A05f87418A3E323F00f7B360f21a456F",
+    PoolLedger:   "0x4BBCb72e695C24e175982354fFBD86Cc25695bF5", // setBoard already burned on gen 0
+  },
+};
+
+// ── Operating notes ────────────────────────────────────────────────────────
 //
-// After deploy, two manual steps are required before play:
-//   1. TIMBS.setTransferWhitelist(PoolLedger, true)  — the LEDGER pays out, so it
-//      is the address that would otherwise trip maxTransferAmount.
-//   2. From the treasury: TIMBS.approve(PoolLedger, <seed budget>) — openTable()
-//      pulls TABLE_SEED (100 TIMBS) per table.
-// And the SeedRegistry owner must call addWriter(SegmentBoard), or the board
-// cannot open tables.
+// Per-deploy wiring (all required before play):
+//   1. PoolLedger.setBoard(SegmentBoard)          — ONE-TIME, irreversible
+//   2. SeedRegistry.addWriter(SegmentBoard)       — else openTable reverts NotWriter
+//   3. TIMBS.setTransferWhitelist(PoolLedger,true)— the LEDGER pays out, so it is
+//      what would otherwise trip maxTransferAmount
+//   4. From seedFunder: TIMBS.approve(PoolLedger, <seed budget>) — openTable pulls
+//      TABLE_SEED (100 TIMBS) per table
+//
+// Opening a table:
+//   - The seed round must be SETTLED: TimbPrize.roundWinningString(round) != 0,
+//     and not already consumed by any generation.
+//   - Commitments are bound to the table id they open under. Derive them on-chain
+//     with SegmentBoard.commitmentsFor(secrets, nextTableId()) — binding them to
+//     the wrong id is silent until lock time, when every reveal fails.
 //
 // Generations: SegmentBoard, PoolLedger and the entropy module are immutable and
 // REDEPLOYED per generation — update those entries each time. SeedRegistry is the
