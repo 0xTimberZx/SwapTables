@@ -559,6 +559,8 @@ interface either way, so the VRF upgrade is a module swap, not a redesign.
       `Σ(open pots + unsettled bets + unclaimed winnings)`. The guardian moves **no** funds; owner
       withdrawals are capped to protocol-owned balance only; neither role can alter a settled outcome
       or block a pull-claim (§13.2).
+- [ ] **Renounce is terminal:** after ownership is renounced / the guardian retired, every privileged
+      entrypoint reverts, and normal play + pull-claims keep working with no admin present (§13.2).
 
 ---
 
@@ -578,8 +580,8 @@ interface either way, so the VRF upgrade is a module swap, not a redesign.
 - **Verifiability vs. covert fallback** — reconcile emitting enough to prove `charᵢ` fair against
   *not* surfacing a "fell back" flag (§10.5/§10.6).
 - **Contract shape** — decided: standalone, **immutable**, four-module split, migrate-by-generation,
-  **halt-only guardian + owner protocol-fund moves** (escrow untouchable) (§13). Open sub-detail: a
-  **timelock** on owner fund-moves (§13.2).
+  **halt-only guardian + owner protocol-fund moves** (escrow untouchable), both **renounceable** and
+  removed at maturity → zero-privilege end-state (§13). No open sub-details.
 - **Swap-velocity data source** — the off-chain meter needs a TimbSwap Router/pair **Swap event or
   volume getter**; no Router ABI is vendored in this repo yet (only TimbPrize's `ScrollNudged`). Pull
   it from the TimbSwap Foundry build. Not a contract dependency (§13.1), only a frontend feed.
@@ -651,8 +653,14 @@ old one."
   - **Player funds never need cross-contract migration:** tables retire-at-six and old generations
     drain, so stakes always settle out on the contract they were placed on. Owner fund-moves are
     protocol ops, not pots.
-  - Recommend (open) a short **timelock** on owner fund-moves so they are observable before they
-    execute.
+  - **Both roles are launch-phase scaffolding.** Guardian and owner are training wheels for the beta
+    window and are **one-way renounceable** — owner → `address(0)`, guardian permanently disabled,
+    each making its calls forever uncallable. They are **removed once the game is finalized and stable
+    on the live website**, leaving a **zero-privilege, fully immutable** generation: no halt, no
+    fund-move, no admin at all. That renounced state is the real target; the roles just get it there
+    safely.
+  - **Timelock:** skipped for the beta window — the role is temporary, narrow (protocol funds only),
+    and capped — so owner moves stay **instant** until renounce. (Revisit only if the window runs long.)
 
 ### 13.3 State & settlement — no unbounded loops
 
