@@ -421,6 +421,11 @@ The four coefficients move off `p(n)` (directions confirmed; ranges are dials):
 (§10.1) — so the curve can live off-chain / in the frontend meter with just a `spinPath` summary
 committed for verification (§10.5). Not gas-bound, so the richer model is affordable.
 
+**Tuner.** An interactive sandbox for these coefficients lives at
+[`docs/tools/spin-tuner.html`](tools/spin-tuner.html) — five reels at n=3/4/5/8/12, the live
+`v(τ;n)` curves, sliders for every dial (defaults reproduce the table above), and a copy-to-spec
+button. Open it in a browser to tune the ranges by feel; the coefficient values here get set from it.
+
 ### 10.3 Timing marks (per segment — all dials)
 
 Measured within the segment window; candidate values are the user's:

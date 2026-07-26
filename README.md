@@ -120,8 +120,10 @@ written yet. The segment lock is now specced as a **roulette-style spin** — a 
 velocity envelope (spin-up → run → settle) with a **Model A + pocket-rattle** curve and a concave
 player-influence map, six segments spinning **overlapping & synced**, commit–reveal + future-block
 entropy now, VRF later with the pre-VRF path kept as a covert fallback (see `docs/SEGMENT_TABLES.md`
-§10). Next unblockers (spec §12 open items): the spin coefficient ranges (best against a simulator),
-settle-reconcile mechanics, and the standalone-`SegmentBoard` contract shape.
+§10). An interactive tuner for the spin curve lives at
+[`docs/tools/spin-tuner.html`](docs/tools/spin-tuner.html) (open in a browser). Next unblockers
+(spec §12 open items): the spin coefficient ranges (tune against the simulator), settle-reconcile
+mechanics, and the standalone-`SegmentBoard` contract shape.
 
 ## License
 
