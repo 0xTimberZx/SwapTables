@@ -58,8 +58,12 @@
   .ch.set b{color:var(--brass2)}
   .ch span{font-size:.55rem;color:var(--faint)}
 
+  /* Tall enough to hold a whole close-out sequence — arm, six locks, retire —
+     without scrolling, since that is exactly when you need to read it back. */
   #log{background:#0a110e;border:1px solid var(--line);border-radius:8px;padding:10px;
-       max-height:230px;overflow:auto;font-size:.72rem;white-space:pre-wrap;word-break:break-word}
+       height:min(60vh,620px);overflow:auto;font-size:.72rem;white-space:pre-wrap;word-break:break-word;
+       resize:vertical}
+  #log:empty{height:auto}
   .l-ok{color:var(--ok)} .l-err{color:var(--bad)} .l-warn{color:var(--warn)} .l-dim{color:var(--faint)}
 
   .note{font-size:.72rem;color:var(--faint);margin-top:8px}
@@ -101,6 +105,18 @@
       <button id="approve" class="ghost" disabled>Approve 1000 TIMBS</button>
       <button id="withdraw" disabled>Withdraw my credit</button>
     </div>
+  </div>
+
+  <!-- ── vault ─────────────────────────────────────────── -->
+  <div class="card">
+    <h2>Vault (PoolLedger)</h2>
+    <div class="grid">
+      <div class="stat"><div class="k">Held balance</div><div class="v" id="sHeld">—</div></div>
+      <div class="stat"><div class="k">Total credited</div><div class="v" id="sOwed">—</div></div>
+      <div class="stat"><div class="k">Unowed (sweepable)</div><div class="v" id="sUnowed">—</div></div>
+    </div>
+    <p class="note" id="vaultNote">Escrow is sacred: held must always be &ge; credited. After a table
+      retires the two should meet exactly, and once every winner withdraws both read zero.</p>
   </div>
 
   <!-- ── table state ───────────────────────────────────── -->
@@ -191,11 +207,24 @@
       <button id="lockAll" class="ghost" disabled>Lock 6</button>
       <button id="retire" class="ghost" disabled>Retire</button>
     </div>
+    <div class="row" style="margin-top:10px">
+      <button id="lockFallback" class="ghost" disabled>Fallback-lock the rest</button>
+    </div>
+    <p class="note">Fallback needs no secret and works once the reveal window (64 blocks)
+      has passed, but only while the lock block is still inside the 256-block hash horizon.
+      On Arbitrum <code>block.number</code> is the <b>L1</b> block number, so those are L1
+      blocks: roughly <b>13 minutes</b> until the fallback opens and <b>51 minutes</b> until
+      the table can no longer be locked. Use it if the reveal is lost or late.</p>
   </div>
 
   <div class="card">
     <h2>Log</h2>
     <div id="log"></div>
+  </div>
+
+  <div class="card">
+    <h2>Contracts</h2>
+    <div id="addrList" style="font-size:.72rem;line-height:1.9;word-break:break-all"></div>
   </div>
 </div>
 
@@ -224,14 +253,100 @@ const BOARD_ABI = [
   "function placeDoubleDigit(uint256 tableId,uint8 chipIdx)",
   "function armTable(uint256 tableId)",
   "function lockSegment(uint256 tableId,uint8 segment,bytes32 secret)",
+  "function lockSegmentFallback(uint256 tableId,uint8 segment)",
+  "function REVEAL_WINDOW() view returns (uint256)",
+  "function BLOCKHASH_HORIZON() view returns (uint256)",
   "function retire(uint256 tableId)",
   "function lockedCharsOf(uint256) view returns (bytes6)",
+  // Custom errors. Without these in the ABI every failure decodes as a bare
+  // "execution reverted" and you cannot tell a closed entry window from a
+  // missing approval. ethers matches them by selector and names them for you.
+  "error ZeroAddress()",
+  "error NotGuardian()",
+  "error Halted()",
+  "error TableUnknown()",
+  "error TableClosedForEntry()",
+  "error TableRetiredAlready()",
+  "error AlreadySeated()",
+  "error NotSeated()",
+  "error TableFull()",
+  "error NotEnoughSeats(uint8 seated,uint8 required)",
+  "error BadChip()",
+  "error NotLoaded()",
+  "error AlreadyLoaded()",
+  "error BetsClosed()",
+  "error AlreadyPlaced(uint8 segment)",
+  "error BadSegment()",
+  "error BadKind()",
+  "error BadPick()",
+  "error NotYetPickTime()",
+  "error NotArmed()",
+  "error AlreadyArmed()",
+  "error SameBlockAsArm()",
+  "error SegmentAlreadyLocked(uint8 segment)",
+  "error RevealWindowOpen()",
+  "error SegmentsOutstanding()",
+  "error EntryStillOpen()",
+  "error TableCanProceed(uint8 seated,uint8 required)",
+  "error LockBlockStillLive(uint256 lockBlock,uint256 expiresAt)",
+  "error NothingLeftToLock()",
+  "error SeedNotSettled(uint256 round)",
+  // thrown by CommitRevealEntropy, propagated through the board's lock calls
+  "error LockBlockUnavailable(uint256 lockBlock)",
+  "error LockBlockNotPast(uint256 lockBlock)",
+  "error BadReveal()",
+  // Inherited from OpenZeppelin — reachable on the operator/owner calls.
+  "error OwnableUnauthorizedAccount(address account)",
+  "error OwnableInvalidOwner(address owner)",
+  "error ReentrancyGuardReentrantCall()",
 ];
+
+/// Plain-English gloss for the errors you can actually hit from this page.
+const ERR_HINT = {
+  TableClosedForEntry: "entry window has closed on this table — open a new one",
+  BetsClosed:          "bets closed (last 5 minutes before the pick)",
+  NotSeated:           "sit at the table first",
+  AlreadySeated:       "this wallet is already seated here",
+  NotLoaded:           "load your six tokens before placing",
+  AlreadyLoaded:       "tokens are already loaded for this wallet",
+  // pool 6 is DD_POOL; anything lower is a segment index
+  AlreadyPlaced:       a => Number(a?.[0]) === 6
+                          ? "this wallet already placed its Double-Digit bet"
+                          : "one token per segment — that segment is already played",
+  TableFull:           "all 12 seats are taken",
+  NotEnoughSeats:      "not enough players seated to arm — cancel to refund instead",
+  NotYetPickTime:      "too early to arm — wait for the pick time",
+  SameBlockAsArm:      "locks must land in a later block than the arm",
+  TableCanProceed:     "this table has enough players, so it cannot be cancelled",
+  EntryStillOpen:      "entry is still open — cancel only after it closes",
+  SegmentsOutstanding: "retire needs all six segments locked first",
+  SeedNotSettled:      "that TimbPrize round has not settled — use Find settled",
+  RevealWindowOpen:    "too early for the fallback — the 64-block reveal window is still open",
+  LockBlockUnavailable:"the lock block aged past the 256-block hash horizon — this table can no longer be locked",
+  BadReveal:           "wrong passphrase — the secret does not match the commitment for this table",
+  LockBlockNotPast:    "the lock block has not been mined yet — wait one block",
+  ExceedsUnowed:       "that would dip into player escrow, which is untouchable",
+  NothingToWithdraw:   "no credit to withdraw",
+  OwnableUnauthorizedAccount: "this wallet is not the owner of that contract",
+  SafeERC20FailedOperation:   "the TIMBS transfer failed — check balance and allowance",
+};
 const LEDGER_ABI = [
   "function credit(address) view returns (uint256)",
   "function heldBalance() view returns (uint256)",
   "function totalCredited() view returns (uint256)",
   "function withdraw()",
+  "error ZeroAddress()",
+  "error ZeroAmount()",
+  "error NotBoard()",
+  "error BoardAlreadySet()",
+  "error LengthMismatch()",
+  "error ExceedsUnowed(uint256 requested,uint256 available)",
+  "error NothingToWithdraw()",
+  // Inherited from OpenZeppelin — reachable on the operator/owner calls.
+  "error OwnableUnauthorizedAccount(address account)",
+  "error OwnableInvalidOwner(address owner)",
+  "error ReentrancyGuardReentrantCall()",
+  "error SafeERC20FailedOperation(address token)",
 ];
 const ERC20_ABI = [
   "function balanceOf(address) view returns (uint256)",
@@ -243,6 +358,20 @@ const PRIZE_ABI = ["function roundWinningString(uint256) view returns (bytes6)"]
 let provider, signer, me, board, ledger, timbs, prize, T = null;
 
 const $ = id => document.getElementById(id);
+addEventListener("DOMContentLoaded", () => {
+  const rows = [["SegmentBoard","board"],["PoolLedger","ledger"],["TIMBS","timbs"],["TimbPrize","prize"]];
+  $("addrList").innerHTML = rows.map(([label,k]) =>
+    `<div><span style="color:var(--faint)">${label}</span> ` +
+    `<a href="https://sepolia.arbiscan.io/address/${ADDR[k]}" target="_blank" rel="noopener">${ADDR[k]}</a></div>`
+  ).join("");
+});
+// An armed table dies ~51 minutes after arming if the reveal is lost (256 L1
+// blocks), and a page reload used to wipe the passphrase that derives the
+// secrets. Persist it.
+try {
+  const saved = localStorage.getItem("swaptables:phrase");
+  if (saved) addEventListener("DOMContentLoaded", () => { if (!$("phrase").value) $("phrase").value = saved; });
+} catch {}
 const fmt = w => Number(ethers.formatUnits(w, 18)).toLocaleString(undefined,{maximumFractionDigits:4});
 function log(msg, cls="") {
   const el = $("log");
@@ -261,10 +390,65 @@ async function tx(label, fn){
     log(`✓ ${label}`, "l-ok");
     return true;
   }catch(e){
-    const m = e?.info?.error?.message || e?.shortMessage || e?.message || String(e);
-    log(`✗ ${label} — ${m}`, "l-err");
+    log(`✗ ${label} — ${explain(e)}`, "l-err");
     return false;
   }
+}
+
+/// Turn a revert into something readable. ethers hands back the decoded custom
+/// error on e.revert once the ABI carries the error signatures; everything else
+/// falls through to the plain message.
+function explain(e){
+  if (e?.code === "ACTION_REJECTED") return "you rejected it in the wallet";
+  if (e?.code === "INSUFFICIENT_FUNDS") return "not enough ETH for gas";
+
+  const named = n => {
+    const h = ERR_HINT[n.name];
+    const hint = typeof h === "function" ? h(n.args) : h;
+    const args = n.args?.length ? ` (${n.args.map(String).join(", ")})` : "";
+    return hint ? `${n.name}${args} — ${hint}` : `${n.name}${args}`;
+  };
+  if (e?.revert?.name) return named(e.revert);
+  if (e?.info?.error?.revert?.name) return named(e.info.error.revert);
+
+  // ethers only decodes the revert when it can find the return data itself. A
+  // browser wallet that fails on eth_estimateGas buries it — the shape differs
+  // per wallet and per RPC, so hunt for the selector blob and decode by hand
+  // against every interface we know.
+  const data = findRevertData(e);
+  if (data){
+    for (const iface of [board?.interface, ledger?.interface, timbs?.interface]){
+      let parsed = null;
+      try { parsed = iface?.parseError(data); } catch { /* not this one */ }
+      if (parsed) return named(parsed);
+    }
+    // Solidity's own Error(string) / Panic(uint256)
+    try {
+      const s = new ethers.Interface([
+        "error Error(string reason)", "error Panic(uint256 code)"
+      ]).parseError(data);
+      if (s) return `${s.name}(${s.args.map(String).join(", ")})`;
+    } catch { /* fall through */ }
+    return `reverted, undecodable — data ${data.slice(0,10)}`;
+  }
+  return e?.info?.error?.message || e?.shortMessage || e?.message || String(e);
+}
+
+/// Walk an arbitrary wallet/RPC error object looking for revert return data:
+/// a 0x-prefixed hex blob at least a 4-byte selector long.
+function findRevertData(e, depth = 0){
+  if (depth > 6 || e == null) return null;
+  if (typeof e === "string")
+    return /^0x[0-9a-fA-F]{8,}$/.test(e) && e.length % 2 === 0 ? e : null;
+  if (typeof e !== "object") return null;
+  // check the usual carriers first so we do not return some unrelated hex
+  for (const k of ["data", "returnData", "originalError", "error", "info", "cause", "body"]){
+    if (k in e){
+      const hit = findRevertData(e[k], depth + 1);
+      if (hit) return hit;
+    }
+  }
+  return null;
 }
 
 // ── connect ────────────────────────────────────────────
@@ -303,6 +487,32 @@ async function refreshMoney(){
   $("sCredit").textContent = fmt(cred);
   $("timbsBox").textContent = `TIMBS ${fmt(bal)}`;
   $("withdraw").disabled = cred === 0n;
+
+  // The escrow-sacred invariant, read straight off the ledger.
+  const [held, owed] = await Promise.all([ledger.heldBalance(), ledger.totalCredited()]);
+  $("sHeld").textContent = fmt(held);
+  $("sOwed").textContent = fmt(owed);
+  $("sUnowed").textContent = fmt(held - owed);
+  const note = $("vaultNote");
+  if (held < owed){
+    note.textContent = `BROKEN: held is ${fmt(owed - held)} short of credited.`;
+    note.className = "note l-err";
+  } else if (held === owed && held === 0n){
+    note.textContent = "Drained to exactly zero — every chip accounted for.";
+    note.className = "note l-ok";
+  } else if (held === owed){
+    note.textContent = "Held == credited: escrow exactly backs what is owed, nothing sweepable.";
+    note.className = "note l-ok";
+  } else {
+    note.textContent = "Escrow is sacred: held must always be >= credited. After a table retires "
+      + "the two should meet exactly, and once every winner withdraws both read zero.";
+    note.className = "note";
+  }
+  // exact wei on long-press / hover, for reconciling against a prediction
+  $("sHeld").title = held.toString();
+  $("sOwed").title = owed.toString();
+  $("sCredit").title = cred.toString();
+  log(`vault held ${held} | credited ${owed} | your credit ${cred}`, "l-dim");
 }
 async function refreshTable(){
   const id = BigInt($("tableId").value || "1");
@@ -385,6 +595,7 @@ $("placeDD").onclick = async () => {
 // ── operator ───────────────────────────────────────────
 function secretsFor(id){
   const p = $("phrase").value;
+  if (p) try { localStorage.setItem("swaptables:phrase", p); } catch {}
   if (!p) { log("Set a passphrase first — it derives (and recovers) your six secrets.", "l-err"); return null; }
   return [...Array(6).keys()].map(i => ethers.keccak256(ethers.toUtf8Bytes(`${p}:${id}:${i+1}`)));
 }
@@ -407,7 +618,11 @@ $("open").onclick = async () => {
   const secs = secretsFor(next.toString());
   if (!secs) return;
   log(`opening table ${next} (secrets bound to id ${next})`, "l-dim");
-  const cs = await board.commitmentsFor(secs, next);
+  // commitmentsFor returns an ethers Result — a frozen array proxy. Passing it
+  // straight back in makes the encoder try to write to it and throw
+  // "Cannot assign to read only property '0'", which is what stopped this
+  // button working. Copy it into a plain array first.
+  const cs = Array.from(await board.commitmentsFor(secs, next));
   if (await tx(`openTable round ${$("round").value}`, () => board.openTable(BigInt($("round").value), cs))){
     $("tableId").value = next.toString();
     refresh();
@@ -416,6 +631,15 @@ $("open").onclick = async () => {
 
 // ── settle ─────────────────────────────────────────────
 async function doArm(){ return tx("armTable", () => board.armTable(tid())); }
+/// The L1 block height as the contract sees it. Arbitrum tags each L2 block
+/// with the L1 block it derives from; that is what block.number returns.
+async function l1BlockNumber(){
+  try{
+    const b = await provider.send("eth_getBlockByNumber", ["latest", false]);
+    return b?.l1BlockNumber != null ? Number(BigInt(b.l1BlockNumber)) : null;
+  }catch{ return null; }
+}
+
 async function doLocks(){
   const secs = secretsFor(tid().toString());
   if (!secs) return false;
@@ -433,6 +657,26 @@ async function doLocks(){
 $("arm").onclick    = async () => { await doArm(); refresh(); };
 $("lockAll").onclick= async () => { await doLocks(); refresh(); };
 $("retire").onclick = async () => { if (await tx("retire", () => board.retire(tid()))) refresh(); };
+$("lockFallback").onclick = async () => {
+  await refreshTable();
+  if (!T || T.lockBlock === 0n) { log("table is not armed yet", "l-err"); return; }
+  // NOT provider.getBlockNumber() — that is the L2 block number, while
+  // block.number inside the contract is the L1 one, and the two differ by
+  // hundreds of millions. Arbitrum exposes the L1 height on the block object.
+  const now = await l1BlockNumber();
+  if (now === null){
+    log(`lock block ${T.lockBlock}; could not read the L1 height, trying anyway`, "l-warn");
+  } else {
+    const age = now - Number(T.lockBlock);
+    log(`lock block ${T.lockBlock}, L1 now ${now} (age ${age} of 256 blocks; `
+      + `fallback opens at 64, ~${Math.max(0, 256 - age) * 12 / 60 | 0} min left)`, "l-dim");
+  }
+  for (let s = 1; s <= 6; s++){
+    if ((Number(T.lockedMask) >> (s-1)) & 1) { log(`seg ${s} already locked`, "l-dim"); continue; }
+    if (!await tx(`fallback-lock seg ${s}`, () => board.lockSegmentFallback(tid(), s))) break;
+  }
+  refresh();
+};
 $("runSettle").onclick = async () => {
   const btn = $("runSettle"); btn.disabled = true;
   try{
