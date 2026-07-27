@@ -32,6 +32,13 @@ Also landing, already on `main` and already exercised in tests:
   they have three live runs of evidence behind them and should not move in the same
   deploy as new recovery paths.
 
+One contract change does land, and it is a deployment guard rather than a mechanic:
+the constructor now rejects dial sets that cannot work (`BadDials`). The dials are
+immutable and were previously unvalidated, so `betsCloseLead >= pickDelay` would have
+bricked betting on a whole generation with no recovery. Gen-2 is the first deploy to
+use non-default dials, so it is the first real chance to fat-finger them. Gen-1's
+values remain legal.
+
 ## Dials — the gen-1 values do not match §10.3
 
 §10.3's marks are measured **from the end** of a ~60-minute segment window. Gen-1
@@ -78,10 +85,14 @@ the contract. The real constraint is arm -> lock, which has 256 L1 blocks (~51 m
 240 / 360 / 30   -> entry 04:00, bets close 05:30, pick 06:00
 ```
 
-The `rearmTable` acceptance test already needs ~51 minutes of waiting; a 60-minute
-round on top makes each iteration ~2 hours. **Open decision:** run gen-2 compressed to
-get `rearmTable` and `cancelTable` proven, then production dials on gen-3 — or take
-the slow iterations and deploy gen-2 straight onto 2400/3595/295.
+**Decided: gen-2 deploys compressed.** `rearmTable` alone needs ~51 minutes of waiting
+after the arm; a 60-minute round on top makes each iteration ~2 hours. Compressed gets
+both recovery paths proven in ~10-minute cycles.
+
+**Generation 3 then deploys on the production dials** once `rearmTable` and
+`cancelTable` have run live. That is an accepted third deploy, not a slip — gen-2 is
+explicitly a test generation and should be labelled as such in `addresses.js` so no
+one mistakes its 6-minute rounds for the real thing.
 
 ## Addresses to carry over
 
@@ -100,6 +111,9 @@ the slow iterations and deploy gen-2 straight onto 2400/3595/295.
 
 ```
 DEPLOYER_PRIVATE_KEY=…
+ENTRY_WINDOW_SECONDS=240
+PICK_DELAY_SECONDS=360
+BETS_CLOSE_SECONDS=30
 TIMBS_ADDRESS=0x2Aaa61E2c08Ff61c93E960EcCd5Dd7fedF0bfaAa
 TIMB_PRIZE_ADDRESS=0x35976f4D2260127848a6274D2eC89ee054412432
 TREASURY_ADDRESS=0xd3F40042aFA8074EA68C9f61dE6aDADD539F0D5c
@@ -162,7 +176,7 @@ Test 3 takes about an hour of waiting. Use 5-TIMBS chips.
   the same interface, so this deploy does not foreclose it, and the pre-VRF path
   remains the covert fallback regardless.
 
-**Still open:**
+- **Dials — compressed** (240 / 360 / 30). Gen-2 is a test generation; gen-3 carries
+  the production 2400 / 3595 / 295.
 
-- **Production or compressed dials for gen-2** (see above). Compressed proves the two
-  recovery paths in ~10-minute rounds but needs a gen-3 for production timing.
+**Nothing open.** The plan is ready to execute.
