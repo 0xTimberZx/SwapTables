@@ -1,7 +1,7 @@
 # Live validation — generation 1
 
 Live runs of the SwapTables board on **Arbitrum Sepolia (421614)** — table 1 on
-2026-07-26, table 3 on 2026-07-27. Every number below was predicted from the spec
+2026-07-26, tables 3 and 4 on 2026-07-27. Every number below was predicted from the spec
 (`SEGMENT_TABLES.md`) *before* reading the chain, then reconciled to the wei. This
 is the record of what the mechanic actually does with real money, not what it was
 designed to do.
@@ -119,6 +119,56 @@ Vault held 345 TIMBS (100 seed + 175 + 70). After both withdrawals,
 DD priced against reality: a repeat among six draws from 36 symbols occurs with
 probability `1 − (36·35·34·33·32·31)/36⁶ ≈ 35.6%`, so fair odds are ≈1.811:1
 against the paid **1.8:1**. The 18000 weight is very close to correct.
+
+---
+
+## Table 4 — the fallback path, and Double-Digit winning
+
+Third run, 2026-07-27, same generation-1 deployment. Purpose-built to exercise
+`lockSegmentFallback`, the one settle path that had never executed on chain.
+
+- **Seed:** TimbPrize round **57** → **`6I8RGW`**.
+- **Two wallets, complementary**, 5-TIMBS chips throughout: wallet 1 **Letter** on
+  all six, wallet 2 **Number** on all six, both with a Double-Digit bet. Vault held
+  **170** (100 seed + 2 × 35).
+- **Method:** armed at pick time, then *deliberately never revealed*. Waited for the
+  64-block reveal window to lapse and settled the whole table with
+  `lockSegmentFallback`, which takes no secret.
+- **Result string:** **`337LBO`** — three letters, three digits, and a repeated `3`.
+
+### Predicted before arming, matched after
+
+| | Predicted | Actual |
+|---|---|---|
+| Wallet 1 | `80860499999999999996` | `80860499999999999996` |
+| Wallet 2 | `80860499999999999996` | `80860499999999999996` |
+| Total credited | `161720999999999999992` | `161720999999999999992` |
+| Unowed → Treasury | `8279000000000000008` | `8279000000000000008` |
+
+Per pool: pot `24285714285714285714`, rake keeps `1182714285714285715`,
+distributable `23102999999999999999`. DD paid `11551499999999999999` to each wallet,
+1 wei of dust left unowed.
+
+### What this run establishes
+
+- **`lockSegmentFallback` settles a table.** Six segments locked with no passphrase,
+  no reveal, entropy from the lock-block hash alone. This was the last untested code
+  path in the money flow.
+- **The 64-block reveal boundary is exact.** Rejected at age 52, accepted at age 68:
+
+  ```
+  4:49:01  lock block 11360489, L1 now 11360541  age 52 of 256  → RevealWindowOpen
+  4:52:29  lock block 11360489, L1 now 11360557  age 68 of 256  → all six locked
+  ```
+
+- **L1 timing confirmed a second time, independently.** 16 blocks between 4:49:01 and
+  4:52:29 is **13.0 s/block** — L1 Ethereum, not Arbitrum's 0.25s L2. A separate
+  measurement from table 3's, agreeing. Discovery #8 is settled fact, not inference.
+- **Double-Digit's *win* branch ran.** Table 3's string had six distinct characters so
+  DD lost; here the repeated `3` paid both wallets. Both DD branches are now live-tested.
+- **Operator liveness without the secret.** A table whose reveal is lost is recoverable
+  by anyone after ~13 minutes, with no operator cooperation — the property that makes
+  the commit–reveal scheme safe to run without a trusted settler.
 
 ---
 
@@ -245,12 +295,14 @@ dot the zero, widen the O, and label each tile `LTR` or `NUM`.
 
 - ~~**Double-Digit is untested on-chain**~~ — settled live on table 3 (contested,
   lost, pot swept). See above.
-- **Fallback path still untested on-chain** — table 3 reached
-  `lockSegmentFallback` but got `RevealWindowOpen`, then settled via the happy
-  path once the passphrase was recovered. The fallback's *success* branch has
-  still never run live; only its too-early guard has.
-- **`rearmTable` untested on-chain** — and untestable on this deployment: the
-  generation-1 board predates it. Needs a generation-2 board.
+- ~~**Fallback path untested on-chain**~~ — settled table 4 end to end, six
+  segments with no secret. Both the too-early guard and the success branch have
+  now run live.
+- **`rearmTable` and `cancelTable` untested on-chain** — and untestable on this
+  deployment: the generation-1 board predates both. Needs a generation-2 board.
+  `cancelTable` is not hypothetical: an empty table opened on 2026-07-27 stranded
+  its 100-TIMBS seed, recoverable only through the ledger owner's
+  `ownerWithdraw` (safe there only because nothing was credited).
 - **Multi-table and near-capacity behaviour untested** — two tables, two seats each.
   The 12-seat settlement loop has not been exercised at size, and the per-lock gas
   envelope (§12) is still unmeasured on real hardware.
