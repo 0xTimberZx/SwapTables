@@ -27,10 +27,61 @@ Also landing, already on `main` and already exercised in tests:
 - **`SeedRegistry` is reused.** It is the one long-lived contract; redeploying it
   would let a winning string seed a second table, breaking the §10.1 uniqueness
   guarantee. Pass the existing address as `SEED_REGISTRY_ADDRESS`.
-- **Dials stay at 40 / 45 / 5 minutes** unless deliberately changed.
+- **Dials are changing — see below.** The gen-1 values do not match §10.3.
 - **No mechanic changes.** Rake, weights, seed share and settlement are untouched —
   they have three live runs of evidence behind them and should not move in the same
   deploy as new recovery paths.
+
+## Dials — the gen-1 values do not match §10.3
+
+§10.3's marks are measured **from the end** of a ~60-minute segment window. Gen-1
+measures `pickDelay` from the *start*, at 45 minutes, which squashes the 20-minute
+tail into 5 and lands two marks on the same instant:
+
+```
+DEPLOYED 40 / 45 / 5            §10.3 in a 60-min window
+  entry closes   40:00            entry closes   40:00
+  bets close     40:00  <- same   bets close     55:00
+  pick / arm     45:00            1-min mark     59:00
+                                  pick / arm     59:55
+```
+
+**This is discovery #5.** It was logged as "entry and bets close at the same instant",
+a quirk of the contract. It is not — it is the arithmetic of `betsCloseLead` counting
+back from a `pickTime` that arrives 15 minutes too early. The contract does exactly
+what §10.3 asks; the dials do not.
+
+It matters because §10.3 gives the two marks different jobs. After 40:00 **no new
+players** — the field is fixed and the spin envelope committed. But seated players
+should keep betting for another 15 minutes while swaps push the meter, until the last
+5. Under gen-1 that phase has zero duration, so the swap-jitter window (§10.2) has
+never actually existed on chain.
+
+### Production values
+
+```
+ENTRY_WINDOW_SECONDS = 2400   # entry closes 40:00
+PICK_DELAY_SECONDS   = 3595   # pick / arm    59:55
+BETS_CLOSE_SECONDS   = 295    # bets close    55:00
+```
+
+`3595 = 59:55`, so the pick lands ~5s before the hour. `295` puts bets-close at
+`59:55 - 4:55 = 55:00`. The 1-min mark is 59:00 and the pick is 55 seconds later,
+as written. All three are constructor args; no contract change.
+
+The ~5s tail is a display target, not a safety margin — there is no 60:00 deadline in
+the contract. The real constraint is arm -> lock, which has 256 L1 blocks (~51 min).
+
+### Test values (same shape, tenth scale)
+
+```
+240 / 360 / 30   -> entry 04:00, bets close 05:30, pick 06:00
+```
+
+The `rearmTable` acceptance test already needs ~51 minutes of waiting; a 60-minute
+round on top makes each iteration ~2 hours. **Open decision:** run gen-2 compressed to
+get `rearmTable` and `cancelTable` proven, then production dials on gen-3 — or take
+the slow iterations and deploy gen-2 straight onto 2400/3595/295.
 
 ## Addresses to carry over
 
@@ -103,11 +154,15 @@ Test 3 takes about an hour of waiting. Use 5-TIMBS chips.
 
 ## Open questions
 
-- **Guardian:** gen-1 runs with one. Keep for gen-2, or deploy zero-privilege now?
-  It is halt-only and retirable, so keeping it costs nothing but the trust surface.
-- **Dials:** the 40 / 45 / 5 window means ~45 minutes from open to pick. Table 4
-  showed that is comfortable for two wallets but slow to iterate on. Worth a shorter
-  set for a test-only generation?
-- **VRF (§10.6):** still Phase 2. The entropy module is swappable behind the same
-  interface, so this deploy does not foreclose it — and the pre-VRF path stays as the
-  covert fallback either way.
+**Decided:**
+
+- **Guardian — kept.** Gen-2 deploys with a guardian, halt-only and retirable.
+  `retireGuardian()` is terminal whenever you want zero-privilege.
+- **VRF (§10.6) — deferred, out of budget.** The entropy module stays swappable behind
+  the same interface, so this deploy does not foreclose it, and the pre-VRF path
+  remains the covert fallback regardless.
+
+**Still open:**
+
+- **Production or compressed dials for gen-2** (see above). Compressed proves the two
+  recovery paths in ~10-minute rounds but needs a gen-3 for production timing.
