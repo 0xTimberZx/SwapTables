@@ -6,11 +6,18 @@ export const ADDRESSES = {
   arbitrumSepolia: {
     chainId: 421614,
 
-    // ── SwapTables board, generation 1 (live) ──────────────────────────────
-    SegmentBoard: "0x25D47477f7bf912791B9a6033d810283f33bF13D", // state machine + pari-mutuel settlement
-    PoolLedger:   "0xf3686b4E86e2b21FaDF36FE43b87EAF9D35FE409", // custodies chips; credits + pays winners
+    // ── SwapTables board, generation 2 (live) ──────────────────────────────
+    //
+    // ⚠ TEST GENERATION. Dials are compressed 10x: entry closes 04:00, bets
+    // close 05:30, pick 06:00 — a whole round is ~6 minutes, not ~60. It exists
+    // to prove rearmTable and cancelTable, which gen-1 predates and which are
+    // therefore untestable on it. Generation 3 carries the production
+    // 2400 / 3595 / 295 from §10.3. Do not mistake these rounds for the real
+    // cadence.
+    SegmentBoard: "0xAfC3a78a4F906C5CEb806d0d580d9175B2105924", // state machine + pari-mutuel settlement
+    PoolLedger:   "0x65ABf55FD57a34c527B07Bd6D90d91D2FbDa220f", // custodies chips; credits + pays winners
     SeedRegistry: "0x2460C8ed63414F36838542982A5Ab263C9Fcb914", // long-lived ACROSS generations — never redeploy
-    CommitRevealEntropy: "0x3280249A9935D1858B9c8A1573a1C81a2f4132A5", // swappable for VRF later
+    CommitRevealEntropy: "0x3ddD099953409D5104CF5081E18DB88Cc842a2c2", // swappable for VRF later
 
     // ── TimbSwap protocol ──────────────────────────────────────────────────
     TimbPrize:    "0x35976f4D2260127848a6274D2eC89ee054412432", // seed source — re-pointed to GameRegistry v5
@@ -40,8 +47,20 @@ export const ADDRESSES = {
 export const RETIRED = {
   arbitrumSepolia: {
     // gen 0: treasury was also the seed funder, so openTable could never fund.
-    SegmentBoard: "0xD1ba5099A05f87418A3E323F00f7B360f21a456F",
-    PoolLedger:   "0x4BBCb72e695C24e175982354fFBD86Cc25695bF5", // setBoard already burned on gen 0
+    gen0: {
+      SegmentBoard: "0xD1ba5099A05f87418A3E323F00f7B360f21a456F",
+      PoolLedger:   "0x4BBCb72e695C24e175982354fFBD86Cc25695bF5", // setBoard already burned on gen 0
+    },
+    // gen 1: not broken — it settled tables 1, 3 and 4 and reconciled to the wei
+    // every time (docs/VALIDATION.md). Superseded because the board is immutable
+    // and it predates rearmTable and cancelTable, so neither recovery path could
+    // be added or tested on it. Its PoolLedger cannot be reused: setBoard is
+    // one-time and already burned.
+    gen1: {
+      SegmentBoard: "0x25D47477f7bf912791B9a6033d810283f33bF13D",
+      PoolLedger:   "0xf3686b4E86e2b21FaDF36FE43b87EAF9D35FE409",
+      CommitRevealEntropy: "0x3280249A9935D1858B9c8A1573a1C81a2f4132A5",
+    },
   },
 };
 
