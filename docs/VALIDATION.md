@@ -172,6 +172,38 @@ distributable `23102999999999999999`. DD paid `11551499999999999999` to each wal
 
 ---
 
+# Generation 2
+
+Deployed 2026-07-27. `SegmentBoard 0xAfC3a78a4F906C5CEb806d0d580d9175B2105924`,
+`PoolLedger 0x65ABf55FD57a34c527B07Bd6D90d91D2FbDa220f`,
+`CommitRevealEntropy 0x3ddD099953409D5104CF5081E18DB88Cc842a2c2`, `SeedRegistry`
+reused. Dials compressed 10x for testing: entry 04:00, bets close 05:30, pick
+06:00. See `GEN2_DEPLOY.md`.
+
+## Table 1 — `cancelTable`
+
+The under-seated escape hatch, which generation 1 predates and could never run.
+
+- Seed round 58 -> `2X8BMQ`, one wallet seated, entry allowed to close.
+- `cancelTable(1)` — permissionless, no arm, nothing settled.
+
+| | |
+|---|---|
+| Vault before | `100` (the seed) |
+| Vault after | `0` |
+| Credited | `0` throughout |
+
+Nothing stranded. This is the path that would have rescued the 100 TIMBS an empty
+table stranded on generation 1 (discovery #7), and it is now proven on chain.
+
+**Note on where the seed goes.** It is *pulled* from `seedFunder` at `openTable`
+but *pushed* to `treasury` on cancel — the transaction shows
+`PoolLedger -> TimbTreasury, 100 TIMBS`. Every cancel therefore moves the float
+one-way from the ops wallet to the Treasury, and the ops wallet needs refilling.
+All protocol money either way, but it is asymmetric and was previously unwritten.
+
+---
+
 # Discoveries
 
 Things deployment taught that the spec and the test suite did not.
@@ -289,6 +321,43 @@ between wallets. The misread implied 4 letters / 2 digits and a wallet-1 credit 
 revealed the character — which is backwards, and the reason the result tiles now
 dot the zero, widen the O, and label each tile `LTR` or `NUM`.
 
+### 11. `retire` and `cancelTable` sweep the whole ledger, not one table
+
+Found by reading the `cancelTable` transaction to check where the seed went.
+Both close-out paths end the same way:
+
+```solidity
+uint256 leftover = ledger.unowed();
+if (leftover > 0) ledger.sweep(treasury, leftover);
+```
+
+`unowed()` is **global** — `balanceOf(this) - totalCredited` — not per table. Pools
+are only credited at lock time, so until a table settles, its seed *and every chip
+its players have loaded* are indistinguishable from surplus. Closing out any one
+table sweeps all of it.
+
+Proven in `tests/MultiTableSweep.t.sol`: two tables open, table A settles and
+retires, and A's retire moves table B's entire 400 TIMBS — 100 seed plus **300 of
+player chips** — to Treasury. Table B is then insolvent; its next `lockSegment`
+reverts `ExceedsUnowed`. Swept 433.07 = table A's own 33.07 leftover plus all of
+table B.
+
+Why three clean runs missed it: we have only ever had one table open at a time.
+The escrow-sacred invariant also still holds in its narrow form — `totalCredited`
+stays fully backed — so every check we ran passed. What is not protected is escrow
+that has not been credited *yet*, which is every live table's stake.
+
+`TABLES_MAX` is 40 and the spec expects 2-4 tables live in parallel, so at any
+scale beyond one this is the normal path.
+
+**No funds lost.** Generations 1 and 2 have only ever run a single table.
+
+**Fix (generation 3):** per-table accounting — the board tracks what each table took
+in and pays out only that table's remainder, instead of asking the ledger for a
+figure that spans every table. Contract change, so it cannot be patched on a live
+generation. The test asserts the current wrong behaviour and is named `KNOWNBUG` so
+it must be inverted when fixed rather than quietly passing.
+
 ---
 
 # Still open
@@ -298,7 +367,8 @@ dot the zero, widen the O, and label each tile `LTR` or `NUM`.
 - ~~**Fallback path untested on-chain**~~ — settled table 4 end to end, six
   segments with no secret. Both the too-early guard and the success branch have
   now run live.
-- **`rearmTable` and `cancelTable` untested on-chain** — and untestable on this
+- ~~**`cancelTable` untested on-chain**~~ — ran on generation 2, table 1.
+- **`rearmTable` untested on-chain** — and untestable on this
   deployment: the generation-1 board predates both. Needs a generation-2 board.
   `cancelTable` is not hypothetical: an empty table opened on 2026-07-27 stranded
   its 100-TIMBS seed, recoverable only through the ledger owner's
