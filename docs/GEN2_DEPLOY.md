@@ -1,9 +1,30 @@
 # Generation 2 — deploy plan
 
-Draft. Nothing here has been executed. Generation 1 (`0x25D4…F13D`) settled three
-tables correctly and every number reconciled to the wei — this is not a bug fix.
-It exists because gen-1 predates two recovery paths, and both are now known to be
-needed rather than theoretical.
+**Executed 2026-07-27.** Generation 1 (`0x25D4…F13D`) settled three tables correctly
+and every number reconciled to the wei — this was not a bug fix. It exists because
+gen-1 predates two recovery paths, and both are now known to be needed rather than
+theoretical.
+
+## Deployed
+
+| Contract | Address |
+|---|---|
+| `SegmentBoard` | `0xAfC3a78a4F906C5CEb806d0d580d9175B2105924` |
+| `PoolLedger` | `0x65ABf55FD57a34c527B07Bd6D90d91D2FbDa220f` |
+| `CommitRevealEntropy` | `0x3ddD099953409D5104CF5081E18DB88Cc842a2c2` |
+| `SeedRegistry` | `0x2460C8ed63414F36838542982A5Ab263C9Fcb914` — reused, **not** redeployed |
+
+Dials `240 / 360 / 30` (entry 04:00, bets close 05:30, pick 06:00). Guardian set.
+Total cost 0.000104947752504 ETH.
+
+Wiring: `setBoard` and `addWriter` both ran inside the deploy script — the deployer
+owns the registry, so step 4 did not need doing by hand. **Steps 1 and 2 remain
+manual** and must be done before play:
+
+- `TIMBS.setTransferWhitelist(0x65ABf55F…220f, true)`
+- from `seedFunder`: `TIMBS.approve(0x65ABf55F…220f, <budget>)`
+
+Acceptance tests below are still outstanding. Gen-2 is **not yet trusted**.
 
 ## Why redeploy
 
