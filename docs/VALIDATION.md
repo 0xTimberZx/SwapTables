@@ -1,9 +1,10 @@
 # Live validation — generation 1
 
-First end-to-end run of the SwapTables board on **Arbitrum Sepolia (421614)**,
-2026-07-26. Every number below was read off-chain after the fact and reconciled
-against the spec (`SEGMENT_TABLES.md`). This is the record of what the mechanic
-actually does with real money, not what it was designed to do.
+Live runs of the SwapTables board on **Arbitrum Sepolia (421614)** — table 1 on
+2026-07-26, table 3 on 2026-07-27. Every number below was predicted from the spec
+(`SEGMENT_TABLES.md`) *before* reading the chain, then reconciled to the wei. This
+is the record of what the mechanic actually does with real money, not what it was
+designed to do.
 
 ## Deployment under test
 
@@ -77,6 +78,50 @@ shares).
 
 ---
 
+## Table 3 — Double-Digit, complementary bets, and a lost reveal
+
+Second full run, 2026-07-27, same generation-1 deployment. This one targeted the
+three things table 1 left open, and accidentally exercised a fourth.
+
+- **Seed:** TimbPrize round **56** → **`XFZKFM`**, consumed in `SeedRegistry`.
+- **Two wallets, complementary:** wallet 1 bet **Letter** on all six segments at
+  25-TIMBS chips; wallet 2 bet **Number** on all six at 10. Both placed a
+  Double-Digit bet (25 and 10), so the DD pool was contested for the first time.
+- **Result string:** **`O8DFRM`** — five letters, one digit, six distinct
+  characters.
+
+### Predicted before arming, matched after
+
+| | Predicted | Actual |
+|---|---|---|
+| Wallet 1 (`0x4253…9800`) | `234427499999999999995` | `234427499999999999995` |
+| Wallet 2 (`0xe863…50dA`) | `46885499999999999999` | `46885499999999999999` |
+| Swept to Treasury | `63687000000000000006` | `63687000000000000006` |
+| `heldBalance == totalCredited` | `281312999999999999994` | `281312999999999999994` |
+
+Vault held 345 TIMBS (100 seed + 175 + 70). After both withdrawals,
+`heldBalance() == totalCredited() == 0`.
+
+### What this run establishes
+
+- **A single winner takes the entire distributable.** Every segment pool paid
+  exactly `46885499999999999999`, whichever side won and despite stakes of 25 vs
+  10 — with one winner, `totalWeight` equals that winner's own weight, so
+  `distributable × amt / totalWeight` collapses and both the stake and the fair
+  multiple cancel. Six segments × that figure is the whole credited total.
+- **Double-Digit settles, and settles correctly when it loses.** Contested, so it
+  drew its ~14.29 seed share; `O8DFRM` has no repeated character, so it paid
+  nobody and its full 49.285714285714285714 pot swept. The losing branch is the
+  harder one to get right, and it is the one that ran.
+- **Complementary Letter/Number gives exactly one winner per segment**, which is
+  what makes the per-segment figure constant and the arithmetic checkable.
+
+DD priced against reality: a repeat among six draws from 36 symbols occurs with
+probability `1 − (36·35·34·33·32·31)/36⁶ ≈ 35.6%`, so fair odds are ≈1.811:1
+against the paid **1.8:1**. The 18000 weight is very close to correct.
+
+---
+
 # Discoveries
 
 Things deployment taught that the spec and the test suite did not.
@@ -145,13 +190,67 @@ with too few seats. Refunds **every** chip, placed or not (no char was ever lock
 so nothing can have won or lost), then returns the seed to the treasury. The
 deployed generation-1 board predates this and does not have it.
 
+### 8. `block.number` on Arbitrum is the **L1** block number — the horizon is ~51 min, not ~65s
+
+`REVEAL_WINDOW` (64) and `BLOCKHASH_HORIZON` (256) were documented as ~16s and
+~65s, from Arbitrum's ~0.25s L2 block time. That is wrong. On Arbitrum
+`block.number` returns the L1 block number, so both windows count **L1 blocks at
+~12s**:
+
+| | blocks | actual |
+|---|---|---|
+| `REVEAL_WINDOW` — fallback opens | 64 | **~13 minutes** |
+| `BLOCKHASH_HORIZON` — table dies | 256 | **~51 minutes** |
+
+Measured, not inferred. Table 3 armed at block `11359219` — an L1 Sepolia
+height, while `eth_blockNumber` simultaneously read `291764724` on L2, a gap of
+280 million. `lockSegmentFallback` still returned `RevealWindowOpen` **12 minutes**
+after arming, putting fewer than 64 blocks in that span (~11–12s each), and the
+table then locked successfully **20 minutes** after arming — flatly impossible
+under the 65-second reading.
+
+Consequences:
+- `rearmTable` is still correct to exist, but it guards a slow leak rather than a
+  near-instant trap. An operator who loses a reveal has under an hour to recover.
+- Any tooling comparing a stored `lockBlock` against `eth_blockNumber` is
+  comparing two different chains' counters and will produce nonsense. The console
+  did exactly this and reported a live table as long dead.
+
+### 9. A lost passphrase is a liveness risk, not just a security one
+
+Table 3's six secrets derive from an operator passphrase. A page reload cleared
+the input mid-round, and because the table was already armed, the reveal was
+temporarily unrecoverable — with `retire()` demanding all six segments and both
+lock paths needing the passphrase or the fallback window. The table survived only
+because the real horizon is ~51 minutes and the passphrase was recoverable from
+scrollback.
+
+The passphrase must therefore be (a) private — deriving it from the seed string
+or any other on-chain value hands everyone the outcome in advance, defeating
+guard #1 — and (b) durable, because losing it after arming can strand a table.
+The console now persists it and offers the fallback path directly.
+
+### 10. `O` and `0` are the same glyph to a reader in a monospace face
+
+`O8DFRM` was read as `08DFRM`. Not cosmetic: Letter and Number are opposite sides
+of the same bet, so one misread character moves an entire segment's payout
+between wallets. The misread implied 4 letters / 2 digits and a wallet-1 credit of
+`187541999999999999996`; the chain paid the 5/1 figure. The credits are what
+revealed the character — which is backwards, and the reason the result tiles now
+dot the zero, widen the O, and label each tile `LTR` or `NUM`.
+
 ---
 
 # Still open
 
-- **Double-Digit is untested on-chain** — no DD bets were placed in this run.
-- **Fallback path untested on-chain** — every segment settled via the happy
-  reveal path. `lockSegmentFallback` is covered by tests but has not run live.
-- **Multi-table and near-capacity behaviour untested** — one table, two seats.
+- ~~**Double-Digit is untested on-chain**~~ — settled live on table 3 (contested,
+  lost, pot swept). See above.
+- **Fallback path still untested on-chain** — table 3 reached
+  `lockSegmentFallback` but got `RevealWindowOpen`, then settled via the happy
+  path once the passphrase was recovered. The fallback's *success* branch has
+  still never run live; only its too-early guard has.
+- **`rearmTable` untested on-chain** — and untestable on this deployment: the
+  generation-1 board predates it. Needs a generation-2 board.
+- **Multi-table and near-capacity behaviour untested** — two tables, two seats each.
   The 12-seat settlement loop has not been exercised at size, and the per-lock gas
   envelope (§12) is still unmeasured on real hardware.
