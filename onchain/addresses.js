@@ -23,7 +23,10 @@ export const ADDRESSES = {
 // ── Roles on the live board ────────────────────────────────────────────────
 //
 // treasury   = TimbTreasury (0xd3F4…0D5c) — sweeps are PUSHED here at retire.
-// seedFunder = an ops EOA                 — the seed is PULLED from here.
+// seedFunder = 0x42536623b503D4926DfAF6173B0357b7DfD19800 (ops EOA)
+//              the seed is PULLED from here, so it must be able to call approve().
+//              Confirmed from the allowance trail: it drops by exactly TABLE_SEED
+//              (100) on every openTable, on top of that wallet's own chip loads.
 //
 // These are deliberately different addresses. Funding a table is a transferFrom,
 // so the funder must be able to call approve() — which TimbTreasury cannot do (it
