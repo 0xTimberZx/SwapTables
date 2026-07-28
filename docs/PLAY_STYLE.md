@@ -51,8 +51,12 @@ another, and a live page must not lie:
 Logged here so they survive; each is a contract change and none is urgent:
 
 1. **Compete-ticket gating** — `sit()` requiring a live Compete entry
-   (`ITimbPrize` lookup) instead of free-form bytes6. The artifact's "Requires
-   an active ticket" strip is the intended end state.
+   instead of free-form bytes6. The artifact's "Requires an active ticket"
+   strip is the intended end state. **UI gate shipped 2026-07-29**: the play
+   page checks `GameRegistry.activeTicketOf(wallet)`, seats only ticket
+   holders, plays the ticket's own letters (read-only), and points ticketless
+   wallets at Compete. The contract itself still accepts any bytes6 — closing
+   that (a direct `sit()` call bypasses the page) is the gen-4 change.
 2. **Auto-grouped seating** — the artifact's "players auto-grouped, N to a
    table" implies the protocol assigns seats across parallel tables. Gen-3's
    parallel escrow makes this *possible*; a router/matchmaker contract would
