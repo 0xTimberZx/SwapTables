@@ -202,6 +202,40 @@ but *pushed* to `treasury` on cancel — the transaction shows
 one-way from the ops wallet to the Treasury, and the ops wallet needs refilling.
 All protocol money either way, but it is asymmetric and was previously unwritten.
 
+## Table 6 — `rearmTable`, the reason generation 2 exists
+
+2026-07-27. The last untested path in the system, and the one gen-1 could not have.
+
+Deliberately jammed: two wallets seated, no chips loaded (`armTable` gates on seats
+only, so the chips add nothing to this test), armed, then **left alone for 63
+minutes** so the lock block would fall out of the 256-block hash horizon.
+
+| | |
+|---|---|
+| Seed round | 44 |
+| Armed | 7:06:12, lock block `11364699` |
+| First lock attempt | 8:09:30 — `LockBlockUnavailable (11364699)` |
+| Fallback attempt | 8:09:54 — `LockBlockUnavailable`, age **309 of 256** |
+| `rearmTable(6)` | 8:10:08 ✓ |
+| Six locks | 8:10:25 → 8:10:49, all ✓ |
+| Retire | 8:11:01, vault `100 → 0` |
+
+Result `S33ZFE`. Nothing credited (no bets), seed swept, nothing stranded.
+
+**The table was genuinely dead before the recovery, not merely late.** Both the
+happy path and the fallback refused, 53 blocks past the horizon, while `retire()`
+still demanded all six segments. That is exactly the state that would have stranded
+a table on generation 1 with every bet inside it. It came back and settled normally.
+
+Two things confirmed alongside:
+
+- **The raw-send fallback works live.** At 8:10:35 the wallet handshake failed on
+  segment 5 and the console retried raw without intervention. That path had only
+  been unit-tested until now.
+- **A third independent L1 timing measurement.** 309 blocks between 7:06:12 and
+  8:09:30 is 12.3 s/block. Discovery #8 now has three confirmations from three
+  separate tables at different hours.
+
 ---
 
 # Discoveries
@@ -368,8 +402,7 @@ it must be inverted when fixed rather than quietly passing.
   segments with no secret. Both the too-early guard and the success branch have
   now run live.
 - ~~**`cancelTable` untested on-chain**~~ — ran on generation 2, table 1.
-- **`rearmTable` untested on-chain** — and untestable on this
-  deployment: the generation-1 board predates both. Needs a generation-2 board.
+- ~~**`rearmTable` untested on-chain**~~ — proven on generation 2, table 6. Needs a generation-2 board.
   `cancelTable` is not hypothetical: an empty table opened on 2026-07-27 stranded
   its 100-TIMBS seed, recoverable only through the ledger owner's
   `ownerWithdraw` (safe there only because nothing was credited).
