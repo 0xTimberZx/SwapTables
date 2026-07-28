@@ -24,7 +24,9 @@ manual** and must be done before play:
 - `TIMBS.setTransferWhitelist(0x65ABf55F…220f, true)`
 - from `seedFunder`: `TIMBS.approve(0x65ABf55F…220f, <budget>)`
 
-Acceptance tests below are still outstanding. Gen-2 is **not yet trusted**.
+**Acceptance complete.** `cancelTable` ran on table 1, `rearmTable` on table 6 — the
+two paths this generation exists to prove. Both recorded in `VALIDATION.md`. Every
+settle and recovery path in the system has now executed on chain.
 
 ## Why redeploy
 
