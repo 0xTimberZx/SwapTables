@@ -238,6 +238,80 @@ Two things confirmed alongside:
 
 ---
 
+# Generation 3
+
+Deployed 2026-07-28. `SegmentBoard 0x1633Fb6405b42835bb8f883a67B7968649c62257`,
+`PoolLedger 0x5ee3d08FEFeFE08d8dDf09386E987Df23dbe105C`,
+`CommitRevealEntropy 0x9aF8683d9FCf593F553fA5FED58E03e5F85e3564`, `SeedRegistry`
+reused. **Production dials for the first time**: entry closes 40:00, bets close
+55:00, pick 59:55 (`2400 / 3595 / 295`, §10.3). Per-table escrow ledger — the
+discovery #11 fix. See `GEN3_DEPLOY.md`.
+
+## Tables 1 + 2 — two tables in parallel, the reason generation 3 exists
+
+2026-07-28, ~9:55 PM → 11:08 PM. The first time two tables have ever been live at
+once — the configuration that discovery #11 made impossible on every earlier
+generation — settled deliberately in reverse open order.
+
+| | Table 1 | Table 2 |
+|---|---|---|
+| Seed round -> string | 30 -> `0FB6OT` | 31 -> `GY1ZOV` |
+| Opened | ~9:55 PM | ~10:02 PM |
+| Stakes | 100 seed + 2 wallets x 6 x 5 | same — escrow `160` each |
+| Armed | 11:05:33, lock block `11365859` | 11:03:03, lock block `11365847` |
+| Six locks | 11:06:23 -> 11:06:39 | 11:03:12 -> 11:03:29 |
+| Retired | 11:06:47 | **11:03:41 — first, with table 1 still live** |
+
+**The proof moment.** After table 2's retire, with table 1 still holding every
+chip un-settled, the vault read exactly:
+
+```
+held 298.617999999999999994 = credited 138.617999999999999994
+                            + escrowed 160.000000000000000000
+surplus 0
+```
+
+Table 1's stake intact to the wei. On generation 2 this same retire swept the
+vault to `credited` and bricked the surviving table (`MultiTableSweep.t.sol`
+proved it against that code); here it took only table 2's own `21.382` leftover.
+Table 1 then armed, locked and retired normally three minutes later.
+
+### Predicted arithmetic, matched to the wei — both tables identical
+
+Every pool contested (2 wallets, complementary picks), no Double-Digit bets:
+
+| | |
+|---|---|
+| Pot per pool | `10 + 100/7 = 24.285714285714285714` |
+| Rake at n=2 | `175 + (800-175)/2 = 487` bps = 4.87% |
+| Single winner takes | `23.102999999999999999` |
+| Credited per table (6 pools) | `138.617999999999999994` |
+| Swept per table | `21.382000000000000006` = rake `7.096285714285714290` + unclaimed DD seed share `14.285714285714285714` + 2 wei seed-split dust |
+
+Wallet `0x4253…9800` won 5 of the 12 pools (`115.514999999999999995`), the other
+wallet 7 (`161.720999999999999993`). Both withdrew; final vault
+`held 0 | credited 0 | escrowed 0 | surplus 0` — drained to exactly zero, fourth
+generation-ending zero in a row.
+
+### What this run establishes
+
+- **Discovery #11 is fixed on chain, not just in Foundry.** One table's close-out
+  cannot reach another's escrow: the `160` survived a retire that, on gen-2 code,
+  demonstrably took everything.
+- **The production clock ran.** A real ~65-minute cycle, and the §10.2 swap-jitter
+  window (40:00 -> 55:00) existed on chain for the first time — every earlier
+  generation had it squashed to zero (gen-1, discovery #5) or compressed (gen-2).
+- **Settlement regression holds on the new ledger.** Same per-pool figures as
+  tables 3/4/6, unchanged through the accounting rewrite.
+- **`SameBlockAsArm` fired live for the first time** (11:05:36): the lock chased
+  the arm into the same block, the contract refused, the retry landed. Until now
+  that guard had only ever run in tests.
+- **The four-way vault split reads clean at every step** — held / credited /
+  escrowed / surplus reconciled after all 30+ transactions, surplus pinned at 0
+  throughout.
+
+---
+
 # Discoveries
 
 Things deployment taught that the spec and the test suite did not.
@@ -386,11 +460,11 @@ scale beyond one this is the normal path.
 
 **No funds lost.** Generations 1 and 2 have only ever run a single table.
 
-**Fix (generation 3):** per-table accounting — the board tracks what each table took
-in and pays out only that table's remainder, instead of asking the ledger for a
-figure that spans every table. Contract change, so it cannot be patched on a live
-generation. The test asserts the current wrong behaviour and is named `KNOWNBUG` so
-it must be inverted when fixed rather than quietly passing.
+**Fixed in generation 3** — the ledger tracks escrow per table and
+`sweepTable(to, tableId)` takes no amount, so a cross-table sweep is
+unrepresentable. The `KNOWNBUG` test was inverted when the fix landed, and the fix
+is **proven live**: see the generation 3 parallel-tables record above, where a
+retire ran with another table's 160 TIMBS in the vault and touched none of it.
 
 ---
 
@@ -406,10 +480,12 @@ it must be inverted when fixed rather than quietly passing.
   `cancelTable` is not hypothetical: an empty table opened on 2026-07-27 stranded
   its 100-TIMBS seed, recoverable only through the ledger owner's
   `ownerWithdraw` (safe there only because nothing was credited).
-- ~~**Discovery #11 — cross-table sweep**~~ — fixed in generation 3 (deployed
-  2026-07-28): the ledger tracks escrow per table, `sweepTable(to, tableId)` has
-  no amount parameter, and the `KNOWNBUG` test is inverted. Needs the live
-  two-tables-in-parallel acceptance run to be marked proven on chain.
-- **Multi-table and near-capacity behaviour untested** — two tables, two seats each.
-  The 12-seat settlement loop has not been exercised at size, and the per-lock gas
-  envelope (§12) is still unmeasured on real hardware.
+- ~~**Discovery #11 — cross-table sweep**~~ — fixed in generation 3 and proven
+  live 2026-07-28: two tables in parallel, retired in reverse order, the second
+  table's 160 TIMBS untouched to the wei. See the generation 3 record.
+- **Near-capacity behaviour untested** — parallel tables are now proven, but only
+  at two seats each. The 12-seat settlement loop has not been exercised at size,
+  and the per-lock gas envelope (§12) is still unmeasured on real hardware.
+- **Zero-privilege** — guardian and owner are still live on generation 3 by
+  design; `retireGuardian()` + renounce whenever parallel-scale confidence is
+  enough.
