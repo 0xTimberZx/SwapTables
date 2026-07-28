@@ -402,10 +402,14 @@ it must be inverted when fixed rather than quietly passing.
   segments with no secret. Both the too-early guard and the success branch have
   now run live.
 - ~~**`cancelTable` untested on-chain**~~ — ran on generation 2, table 1.
-- ~~**`rearmTable` untested on-chain**~~ — proven on generation 2, table 6. Needs a generation-2 board.
+- ~~**`rearmTable` untested on-chain**~~ — proven on generation 2, table 6.
   `cancelTable` is not hypothetical: an empty table opened on 2026-07-27 stranded
   its 100-TIMBS seed, recoverable only through the ledger owner's
   `ownerWithdraw` (safe there only because nothing was credited).
+- ~~**Discovery #11 — cross-table sweep**~~ — fixed in generation 3 (deployed
+  2026-07-28): the ledger tracks escrow per table, `sweepTable(to, tableId)` has
+  no amount parameter, and the `KNOWNBUG` test is inverted. Needs the live
+  two-tables-in-parallel acceptance run to be marked proven on chain.
 - **Multi-table and near-capacity behaviour untested** — two tables, two seats each.
   The 12-seat settlement loop has not been exercised at size, and the per-lock gas
   envelope (§12) is still unmeasured on real hardware.

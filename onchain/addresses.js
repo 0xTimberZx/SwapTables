@@ -6,18 +6,18 @@ export const ADDRESSES = {
   arbitrumSepolia: {
     chainId: 421614,
 
-    // ── SwapTables board, generation 2 (live) ──────────────────────────────
+    // ── SwapTables board, generation 3 (live) ──────────────────────────────
     //
-    // ⚠ TEST GENERATION. Dials are compressed 10x: entry closes 04:00, bets
-    // close 05:30, pick 06:00 — a whole round is ~6 minutes, not ~60. It exists
-    // to prove rearmTable and cancelTable, which gen-1 predates and which are
-    // therefore untestable on it. Generation 3 carries the production
-    // 2400 / 3595 / 295 from §10.3. Do not mistake these rounds for the real
-    // cadence.
-    SegmentBoard: "0xAfC3a78a4F906C5CEb806d0d580d9175B2105924", // state machine + pari-mutuel settlement
-    PoolLedger:   "0x65ABf55FD57a34c527B07Bd6D90d91D2FbDa220f", // custodies chips; credits + pays winners
+    // PRODUCTION DIALS, first time on chain: entry closes 40:00, bets close
+    // 55:00, pick 59:55 (2400 / 3595 / 295, §10.3). A full round is ~60 min.
+    // This generation carries the per-table escrow ledger: money is tracked
+    // per table (tableEscrow), sweeps are sweepTable(to, tableId) with no
+    // amount parameter, and cancelTable returns the seed to seedFunder.
+    // Deployed 2026-07-28; fixes VALIDATION.md discovery #11.
+    SegmentBoard: "0x1633Fb6405b42835bb8f883a67B7968649c62257", // state machine + pari-mutuel settlement
+    PoolLedger:   "0x5ee3d08FEFeFE08d8dDf09386E987Df23dbe105C", // custodies chips PER TABLE; credits + pays winners
     SeedRegistry: "0x2460C8ed63414F36838542982A5Ab263C9Fcb914", // long-lived ACROSS generations — never redeploy
-    CommitRevealEntropy: "0x3ddD099953409D5104CF5081E18DB88Cc842a2c2", // swappable for VRF later
+    CommitRevealEntropy: "0x9aF8683d9FCf593F553fA5FED58E03e5F85e3564", // swappable for VRF later
 
     // ── TimbSwap protocol ──────────────────────────────────────────────────
     TimbPrize:    "0x35976f4D2260127848a6274D2eC89ee054412432", // seed source — re-pointed to GameRegistry v5
@@ -30,6 +30,8 @@ export const ADDRESSES = {
 // ── Roles on the live board ────────────────────────────────────────────────
 //
 // treasury   = TimbTreasury (0xd3F4…0D5c) — sweeps are PUSHED here at retire.
+//              On CANCEL (gen-3+) the seed goes back to seedFunder instead — a
+//              cancelled table had no round and no rake.
 // seedFunder = 0x42536623b503D4926DfAF6173B0357b7DfD19800 (ops EOA)
 //              the seed is PULLED from here, so it must be able to call approve().
 //              Confirmed from the allowance trail: it drops by exactly TABLE_SEED
@@ -60,6 +62,17 @@ export const RETIRED = {
       SegmentBoard: "0x25D47477f7bf912791B9a6033d810283f33bF13D",
       PoolLedger:   "0xf3686b4E86e2b21FaDF36FE43b87EAF9D35FE409",
       CommitRevealEntropy: "0x3280249A9935D1858B9c8A1573a1C81a2f4132A5",
+    },
+    // gen 2: the compressed test generation (dials 240/360/30). Did its job —
+    // cancelTable ran on its table 1 and rearmTable on its table 6, and its
+    // full round reconciled to the wei. Superseded because its ledger sweeps
+    // GLOBALLY (discovery #11: retiring any table takes every other live
+    // table's escrow), which caps it at one table at a time forever. Its
+    // PoolLedger cannot be reused: setBoard is one-time and already burned.
+    gen2: {
+      SegmentBoard: "0xAfC3a78a4F906C5CEb806d0d580d9175B2105924",
+      PoolLedger:   "0x65ABf55FD57a34c527B07Bd6D90d91D2FbDa220f",
+      CommitRevealEntropy: "0x3ddD099953409D5104CF5081E18DB88Cc842a2c2",
     },
   },
 };
