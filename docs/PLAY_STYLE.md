@@ -65,13 +65,66 @@ Logged here so they survive; each is a contract change and none is urgent:
    contract keeps DD as its own stake. Decide whether the DD-from-token model
    is worth the accounting change. Current view: no — separate stake is cleaner
    and already validated live.
-5. **Ticket secrecy (from the table-3 rehearsal)** — `sit()` stores the ticket
+5. **Encore rounds (from round 3)** — table 3 opened on a 100 seed and ended
+   holding 782 after the locks, most of it no-winner pots. Proposal: **if the
+   board ends up with more than it started with once the locks hit, the table
+   offers a second seating** —
+
+   - at settle, if `leftover > seed`, the table does not retire: it opens a
+     fresh **40:00 entry window** on the same table, surplus staked as the
+     encore round's seed (no pull from `seedFunder`)
+   - the encore is a real round: a fresh seed string burns in the registry
+     and fresh commitments publish at the offer — §10.1 uniqueness holds;
+     "run it again" means re-fund, never re-spin
+   - if fewer than `SEATS_MIN` sit by the deadline, the table **officially
+     closes**: everything it still holds — earnings, rake, the unclaimed
+     pots — finally ships to Treasury in one sweep
+   - ledger-side this is one new primitive in the gen-3 spirit,
+     `carryTable(fromRound, toRound, amount)`: escrow moves round-to-round
+     inside the vault, so `balance >= credited + escrowed` never bends
+   - needs per-round `seed`/`SEED_SHARE` (stored, not constant) so a
+     782-seed encore pays ~111 a pool instead of 14.28 — the second chance
+     is visibly worth sitting for
+   - open questions before building: whether the rake portion rides the
+     encore or ships at each settle, and a carry cap so one whale's missed
+     longshot cannot mint an absurd table
+
+6. **Ticket secrecy (from the table-3 rehearsal)** — `sit()` stores the ticket
    in plain view; `seats()` is public, so any player can read any other's
    ticket and Your-Ticket bets are open books. The play page masks the tiles
    on screen (2026-07-28), but that is cosmetic. Real secrecy is a
    commit-reveal ticket: sit with `keccak(ticket ‖ salt)`, reveal at
    settlement, forfeit Your-Ticket wins on a bad reveal. Costs one extra
    player transaction per round — decide whether the bet matters enough.
+
+## One spin per table — why, and how to run continuously
+
+Asked after round 3 ("can we keep a table open and start another spin?"):
+
+**No — one table is one spin, by design.** `retire` is terminal and the seed
+round burns in the `SeedRegistry` at open. That is §10.1's uniqueness
+guarantee: a winning string seeds at most one table, ever. Strings are not a
+scarce resource to save — every Compete round mints one, and Find settled now
+skips the burned ones automatically.
+
+**Continuous play = rolling tables**, which per-table escrow (gen-3) made
+safe and the acceptance run proved: open table N+1 from the console while
+table N is in its betting phase. There is always a table in entry; each one
+burns its own seed and settles its own escrow. A true multi-round table is a
+gen-4 contract question and would need its own uniqueness story.
+
+**On watchers "gaming the winning string": there is no vector.** The outcome
+is derived from the commitments (published at open, before any bet) mixed
+with the lock-block hash — a block that does not exist until after betting
+has closed. The seed string never enters the outcome math. By the time the
+first character is knowable by anyone, every stake on the table is final, so
+watching the reels — or the whole reveal — is information without a trade.
+Previous players and Compete watchers know only strings that can never seed
+another table. The bounded trust that DOES remain is documented in §10.1
+(operator knows the secrets and could stall — the fallback answers that;
+sequencer timing — VRF is the eventual answer, §10.6). The play page's
+"hold the drop" toggle (2026-07-28) keeps reels face-down until all six lock;
+it is theater, and labelled as such.
 
 ## Spin-meter coefficients (§10.2)
 
