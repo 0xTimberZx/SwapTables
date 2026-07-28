@@ -65,7 +65,31 @@ Logged here so they survive; each is a contract change and none is urgent:
    contract keeps DD as its own stake. Decide whether the DD-from-token model
    is worth the accounting change. Current view: no — separate stake is cleaner
    and already validated live.
-5. **Ticket secrecy (from the table-3 rehearsal)** — `sit()` stores the ticket
+5. **Encore rounds (from round 3)** — table 3 opened on a 100 seed and ended
+   holding 782 after the locks, most of it no-winner pots. Proposal: **if the
+   board ends up with more than it started with once the locks hit, the table
+   offers a second seating** —
+
+   - at settle, if `leftover > seed`, the table does not retire: it opens a
+     fresh **40:00 entry window** on the same table, surplus staked as the
+     encore round's seed (no pull from `seedFunder`)
+   - the encore is a real round: a fresh seed string burns in the registry
+     and fresh commitments publish at the offer — §10.1 uniqueness holds;
+     "run it again" means re-fund, never re-spin
+   - if fewer than `SEATS_MIN` sit by the deadline, the table **officially
+     closes**: everything it still holds — earnings, rake, the unclaimed
+     pots — finally ships to Treasury in one sweep
+   - ledger-side this is one new primitive in the gen-3 spirit,
+     `carryTable(fromRound, toRound, amount)`: escrow moves round-to-round
+     inside the vault, so `balance >= credited + escrowed` never bends
+   - needs per-round `seed`/`SEED_SHARE` (stored, not constant) so a
+     782-seed encore pays ~111 a pool instead of 14.28 — the second chance
+     is visibly worth sitting for
+   - open questions before building: whether the rake portion rides the
+     encore or ships at each settle, and a carry cap so one whale's missed
+     longshot cannot mint an absurd table
+
+6. **Ticket secrecy (from the table-3 rehearsal)** — `sit()` stores the ticket
    in plain view; `seats()` is public, so any player can read any other's
    ticket and Your-Ticket bets are open books. The play page masks the tiles
    on screen (2026-07-28), but that is cosmetic. Real secrecy is a
