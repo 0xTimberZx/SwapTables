@@ -97,6 +97,15 @@ Logged here so they survive; each is a contract change and none is urgent:
    settlement, forfeit Your-Ticket wins on a bad reveal. Costs one extra
    player transaction per round — decide whether the bet matters enough.
 
+7. **Ticket-Any bet kind** — proposed while fixing the feed's "?" badges
+   (2026-07-29). The deployed Your-Ticket kind is positional: the segment must
+   land the ticket's character FOR THAT SEGMENT (1 of 36, weight 35x). A looser
+   companion kind — the segment lands ANY of the ticket's six characters — is
+   a different bet: <= 6 of 36, fair weight ~5x (less with repeated chars).
+   Would need its own `KIND_` and weight derived from the ticket's distinct
+   character count. The feed meanwhile judges by the contract rule and shows
+   only WON/MISS, never the matched character.
+
 ## One spin per table — why, and how to run continuously
 
 Asked after round 3 ("can we keep a table open and start another spin?"):
