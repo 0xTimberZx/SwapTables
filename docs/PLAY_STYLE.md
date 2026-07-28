@@ -89,9 +89,15 @@ Logged here so they survive; each is a contract change and none is urgent:
    - needs per-round `seed`/`SEED_SHARE` (stored, not constant) so a
      782-seed encore pays ~111 a pool instead of 14.28 — the second chance
      is visibly worth sitting for
-   - open questions before building: whether the rake portion rides the
-     encore or ships at each settle, and a carry cap so one whale's missed
-     longshot cannot mint an absurd table
+   - **Decided 2026-07-29** (full spec: `GEN4_DEPLOY.md`): rake ships to
+     Treasury every settle, only the unclaimed pots carry; the carry is a
+     metered per-table reserve (`min(reserve, SEED_CAP)` per encore, remainder
+     rolls to future encores, sweeps to Treasury when a table closes unfilled);
+     and the "bet 5 to drain 1000" leverage is killed by a **minimum stake that
+     scales with the seed on offer** (payout ÷ stake capped at `MAX_LEVERAGE`) —
+     so an encore can be big AND fair. Build held until after the first friends
+     session, whose cold-wallet edge cases will finalize the credit-across-an-
+     encore keying.
 
 6. **Ticket secrecy (from the table-3 rehearsal)** — `sit()` stores the ticket
    in plain view; `seats()` is public, so any player can read any other's
