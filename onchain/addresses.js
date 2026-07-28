@@ -18,6 +18,7 @@ export const ADDRESSES = {
     PoolLedger:   "0x5ee3d08FEFeFE08d8dDf09386E987Df23dbe105C", // custodies chips PER TABLE; credits + pays winners
     SeedRegistry: "0x2460C8ed63414F36838542982A5Ab263C9Fcb914", // long-lived ACROSS generations — never redeploy
     CommitRevealEntropy: "0x9aF8683d9FCf593F553fA5FED58E03e5F85e3564", // swappable for VRF later
+    SegmentCrank: "0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D", // stateless lock/retire batcher — permissionless, generation-AGNOSTIC: survives redeploys
 
     // ── TimbSwap protocol ──────────────────────────────────────────────────
     TimbPrize:    "0x35976f4D2260127848a6274D2eC89ee054412432", // seed source — re-pointed to GameRegistry v5
