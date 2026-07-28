@@ -21,7 +21,14 @@ script. Total cost 0.000101208733668 ETH.
 
 Decisions taken at build time: cancel returns the seed to `seedFunder` (not
 treasury); guardian kept, `retireGuardian()` + renounce deferred until the
-arithmetic has run at parallel scale. Acceptance tests below are pending.
+arithmetic has run at parallel scale.
+
+**Acceptance run complete 2026-07-28** — tables 1 + 2 in parallel, settled in
+reverse open order; the second retire left the live table's 160 TIMBS untouched
+to the wei and the vault drained to exactly zero at the end. Covers acceptance
+tests 1, 2, 4 (regression figures identical) and 6; `cancelTable`/`rearmTable`
+(test 5) and the explicit `ownerWithdraw` cap probe (test 3) remain to be run on
+this board, both already unit-proven. Full record: `VALIDATION.md`, Generation 3.
 
 Generation 2 exists to prove two recovery paths. Generation 3 exists to fix
 discovery #11 and to run the production timing. Unlike gen-2, this one **changes
