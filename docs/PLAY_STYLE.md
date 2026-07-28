@@ -65,6 +65,13 @@ Logged here so they survive; each is a contract change and none is urgent:
    contract keeps DD as its own stake. Decide whether the DD-from-token model
    is worth the accounting change. Current view: no — separate stake is cleaner
    and already validated live.
+5. **Ticket secrecy (from the table-3 rehearsal)** — `sit()` stores the ticket
+   in plain view; `seats()` is public, so any player can read any other's
+   ticket and Your-Ticket bets are open books. The play page masks the tiles
+   on screen (2026-07-28), but that is cosmetic. Real secrecy is a
+   commit-reveal ticket: sit with `keccak(ticket ‖ salt)`, reveal at
+   settlement, forfeit Your-Ticket wins on a bad reveal. Costs one extra
+   player transaction per round — decide whether the bet matters enough.
 
 ## Spin-meter coefficients (§10.2)
 
