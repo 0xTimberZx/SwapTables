@@ -1,6 +1,27 @@
 # Generation 3 — plan
 
-Draft. Nothing here has been executed.
+**Deployed 2026-07-28** on the production dials — the first generation to run
+§10.3's real marks on chain. Contract change merged as TimbSwap PR #266.
+
+| Contract | Address |
+|---|---|
+| `SegmentBoard` | `0x1633Fb6405b42835bb8f883a67B7968649c62257` |
+| `PoolLedger` | `0x5ee3d08FEFeFE08d8dDf09386E987Df23dbe105C` |
+| `CommitRevealEntropy` | `0x9aF8683d9FCf593F553fA5FED58E03e5F85e3564` |
+| `SeedRegistry` | `0x2460C8ed63414F36838542982A5Ab263C9Fcb914` — reused, **not** redeployed |
+
+Dials `2400 / 3595 / 295` (entry 40:00, bets close 55:00, pick 59:55). Guardian
+and seedFunder both `0x4253…9800`. `setBoard` and `addWriter` ran in the deploy
+script. Total cost 0.000101208733668 ETH.
+
+**Manual wiring still required before play** (script's ACTION REQUIRED list):
+
+- `TIMBS.setTransferWhitelist(0x5ee3d08F…105C, true)`
+- from `seedFunder`: `TIMBS.approve(0x5ee3d08F…105C, <budget>)`
+
+Decisions taken at build time: cancel returns the seed to `seedFunder` (not
+treasury); guardian kept, `retireGuardian()` + renounce deferred until the
+arithmetic has run at parallel scale. Acceptance tests below are pending.
 
 Generation 2 exists to prove two recovery paths. Generation 3 exists to fix
 discovery #11 and to run the production timing. Unlike gen-2, this one **changes
@@ -130,6 +151,11 @@ budget for it.
 
 ## Open
 
-- Seed-return policy on cancel: `seedFunder` or `treasury`?
-- Whether gen-3 is the generation that goes zero-privilege (`retireGuardian` +
-  renounce), or whether that waits until the arithmetic has run at parallel scale.
+**Both decided at build time:**
+
+- **Seed on cancel — returns to `seedFunder`.** A cancelled table had no round
+  and no rake, so the float goes back where it was pulled from; cancels no
+  longer drain the ops wallet. Retire still sweeps to Treasury.
+- **Zero-privilege — deferred.** Guardian kept for the first parallel-scale runs
+  on the new accounting; `retireGuardian()` + renounce remain available at any
+  time without a redeploy.
