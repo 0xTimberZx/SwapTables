@@ -73,6 +73,35 @@ Logged here so they survive; each is a contract change and none is urgent:
    settlement, forfeit Your-Ticket wins on a bad reveal. Costs one extra
    player transaction per round — decide whether the bet matters enough.
 
+## One spin per table — why, and how to run continuously
+
+Asked after round 3 ("can we keep a table open and start another spin?"):
+
+**No — one table is one spin, by design.** `retire` is terminal and the seed
+round burns in the `SeedRegistry` at open. That is §10.1's uniqueness
+guarantee: a winning string seeds at most one table, ever. Strings are not a
+scarce resource to save — every Compete round mints one, and Find settled now
+skips the burned ones automatically.
+
+**Continuous play = rolling tables**, which per-table escrow (gen-3) made
+safe and the acceptance run proved: open table N+1 from the console while
+table N is in its betting phase. There is always a table in entry; each one
+burns its own seed and settles its own escrow. A true multi-round table is a
+gen-4 contract question and would need its own uniqueness story.
+
+**On watchers "gaming the winning string": there is no vector.** The outcome
+is derived from the commitments (published at open, before any bet) mixed
+with the lock-block hash — a block that does not exist until after betting
+has closed. The seed string never enters the outcome math. By the time the
+first character is knowable by anyone, every stake on the table is final, so
+watching the reels — or the whole reveal — is information without a trade.
+Previous players and Compete watchers know only strings that can never seed
+another table. The bounded trust that DOES remain is documented in §10.1
+(operator knows the secrets and could stall — the fallback answers that;
+sequencer timing — VRF is the eventual answer, §10.6). The play page's
+"hold the drop" toggle (2026-07-28) keeps reels face-down until all six lock;
+it is theater, and labelled as such.
+
 ## Spin-meter coefficients (§10.2)
 
 `play.html` ships the tuner's defaults, which reproduce the spec table:
