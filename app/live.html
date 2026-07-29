@@ -363,6 +363,16 @@
   body.attract #poolPanel .prow.done .pmeta{color:#43d98e}
   body.attract #betFeed,body.attract #poolPanel{opacity:0;transition:opacity .6s}
   body.attract #betFeed.on,body.attract #poolPanel.on{opacity:1}
+  /* switching tables: dim the whole feed and say so, plainly and large */
+  #switchScrim{display:none}
+  body.attract #switchScrim{display:block;position:fixed;inset:0;z-index:80;pointer-events:none;
+    background:rgba(4,10,7,.9);opacity:0;transition:opacity .55s ease}
+  body.attract.switching #switchScrim{opacity:1}
+  #switchScrim .sw-in{position:absolute;inset:0;display:grid;place-content:center;text-align:center;
+    font-family:Georgia,serif;padding:0 40px}
+  #switchScrim .sw-k{font-size:14px;letter-spacing:.36em;text-transform:uppercase;color:#8fa295}
+  #switchScrim .sw-t{margin-top:16px;font-size:56px;font-weight:800;color:#f7f0d6;letter-spacing:.01em}
+  #switchScrim .sw-s{margin-top:18px;font-size:14.5px;color:#7d9186;font-style:italic}
   /* spectate: the REAL board, ghosted in behind the meter — coins land from the feed */
   body.attract .felt-scroll{display:none !important}
   body.attract.spec .wrap{justify-content:flex-start;padding-top:96px}
@@ -1724,8 +1734,23 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
     "https://arbitrum-sepolia.gateway.tenderly.co",
   ];
   let mode="lobby", specTid=null, ro=null, roBoard=null, roLedger=null, pot=null, lastBarTxt="";
+  const SB_HDRS={apikey:SB_KEY, Authorization:"Bearer "+SB_KEY};
+  const ROTATE_MS=60000;        // dwell on each live table before rotating
+  const RESULT_HOLD_MS=15000;   // keep a finished table on screen so the result is seen
+  const PICK_STALL_MS=30000;    // armed but no lock for this long → free to flip away
+  const PRE_PICK_S=180;         // never rotate away this close to pick time
+  const PICK_HOLD_MAX=480000;   // cap the run-up hold so a dead table can't wedge us
+  const SWITCH_MS=2600;         // length of the on-screen switch card
+  let holdUntil=0, lastSwitch=0, holdStart=0, liveCount=0;
+  let lastProgress=0, lastMask=-1, lastLockBlock="";
+  const flagCleared=new Set();
 
   const bar=document.createElement("div"); bar.id="spectateBar"; document.body.appendChild(bar);
+  const scrim=document.createElement("div"); scrim.id="switchScrim";
+  scrim.innerHTML='<div class="sw-in"><div class="sw-k">Switching tables</div>'
+    +'<div class="sw-t" id="swT">—</div>'
+    +'<div class="sw-s">this feed follows one table at a time · Arbitrum Sepolia testnet · play chips, no real money</div></div>';
+  document.body.appendChild(scrim);
   const bfeed=document.createElement("div"); bfeed.id="betFeed";  document.body.appendChild(bfeed);
   const ppan =document.createElement("div"); ppan.id="poolPanel"; document.body.appendChild(ppan);
   const coinLayer=document.createElement("div"); coinLayer.id="coinLayer"; document.body.appendChild(coinLayer);
@@ -1907,35 +1932,92 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
       {headers:{apikey:SB_KEY, Authorization:"Bearer "+SB_KEY}});
     if(!r.ok) return null;
     const rows=await r.json();
-    return rows.map(x=>Number(x.table_id));
+    return [...new Set(rows.map(x=>Number(x.table_id)))];
   }
+  function dropToLobby(){ mode="lobby"; T=null; specTid=null; holdUntil=0; }
   async function pollTable(){
     if(MOCK || specTid==null || !roBoard) return;
     try{
       const [t,e]=await Promise.all([roBoard.tables(specTid), roLedger.tableEscrow(specTid)]);
-      if(t.openedAt===0n || t.retired){ mode="lobby"; T=null; specTid=null; return; }
+      if(t.openedAt===0n){ dropToLobby(); return; }
       T=t; tid=specTid; pot=e; mode="spectate";
+      const mk=Number(t.lockedMask), lb=String(t.lockBlock);
+      if(mk!==lastMask || lb!==lastLockBlock){ lastProgress=Date.now(); lastMask=mk; lastLockBlock=lb; }
+      if(t.retired){
+        // runSettle lands arm + six locks + retire in ONE tx, so without this the
+        // whole payoff (the settled six-char string) would never appear on stream.
+        if(!holdUntil) holdUntil=Date.now()+RESULT_HOLD_MS;
+        if(Date.now()>holdUntil) dropToLobby();
+      } else holdUntil=0;
     }catch{}
   }
-  function midPick(){
-    return mode==="spectate" && T && !T.retired
-        && T.lockBlock!==0n && Number(T.lockedMask)!==0x3F;
+  /// A retired table left flagged in the registry would otherwise sit at the head of
+  /// the candidate list forever. Only ever cleared for a table the chain says is
+  /// retired — a flag on a table that has not opened yet is deliberate (pre-opt-in).
+  async function clearFlag(id){
+    if(PIN!=null || flagCleared.has(id)) return;
+    flagCleared.add(id);
+    try{
+      await fetch(SB_URL+"/rest/v1/stream_tables?board=eq."+ADDR.board.toLowerCase()+"&table_id=eq."+id,
+        {method:"PATCH", headers:{...SB_HDRS,"Content-Type":"application/json"},
+         body:JSON.stringify({streamed:false})});
+    }catch{}
+  }
+  /// Why the feed is not allowed to move right now, or null if it is free to.
+  ///  - the run-up (bets closed → pick time) and the final PRE_PICK_S are the whole
+  ///    point of watching, so never rotate through them;
+  ///  - once armed, hold while locks are actually landing — each lock refreshes the
+  ///    timer — but release after PICK_STALL_MS of nothing so a stalled operator
+  ///    cannot wedge the stream;
+  ///  - all six locked: hold briefly so the settled string is seen, then free.
+  function holdReason(){
+    if(!(mode==="spectate" && T && !T.retired)){ holdStart=0; return null; }
+    const sinceProgress = Date.now()-lastProgress;
+    if(Number(T.lockedMask)===0x3F) return sinceProgress<RESULT_HOLD_MS ? "result" : null;
+    if(T.lockBlock!==0n)            return sinceProgress<PICK_STALL_MS  ? "locks"  : null;
+    const toPick=Number(T.pickTime)-Math.floor(Date.now()/1000);
+    const runUp = ["committed","ready"].includes(phaseOf().key) || (toPick>0 && toPick<=PRE_PICK_S);
+    if(!runUp){ holdStart=0; return null; }
+    if(!holdStart) holdStart=Date.now();
+    return Date.now()-holdStart < PICK_HOLD_MAX ? "run-up" : null;
+  }
+  function announceSwitch(id){
+    const el=document.getElementById("swT");
+    if(el) el.textContent="Now viewing TABLE "+id;
+    document.body.classList.add("switching");
+    setTimeout(()=>document.body.classList.remove("switching"), SWITCH_MS);
+  }
+  async function switchTo(id){
+    announceSwitch(id);
+    specTid=id; lastSwitch=Date.now(); holdUntil=0; holdStart=0;
+    lastProgress=Date.now(); lastMask=-1; lastLockBlock="";
+    resetSpecFeed(); await pollTable(); await pollBets(true);   // backfill quietly
   }
   async function director(){
     if(LOBBY_ONLY || MOCK) return;
     try{
       if(!ro && !(await initRO())) return;
-      if(midPick()) return;                        // never cut away mid-pick
+      if(holdUntil && Date.now()<holdUntil) return;           // finished table on screen
+      if(holdReason()) return;                                // run-up, or locks landing
+
       const cands=await registryPick();
-      if(!cands || !cands.length){ if(specTid!=null){ mode="lobby"; T=null; specTid=null; } return; }
-      if(mode==="spectate" && T && cands.includes(specTid)) return;   // current table still opted in
+      if(cands==null) return;              // registry unreachable → keep what is on screen
+
+      const live=[];
       for(const id of cands){
-        let t; try{ t=await roBoard.tables(id); }catch{ continue; }
-        if(t.openedAt===0n || t.retired) continue; // stale flag → try the next candidate
-        if(id!==specTid){ specTid=id; resetSpecFeed(); await pollTable(); await pollBets(true); }
-        return;
+        let t; try{ t=await roBoard.tables(id); }catch{ continue; }   // RPC hiccup: judge nothing
+        if(t.retired){ clearFlag(id); continue; }
+        if(t.openedAt===0n) continue;                                 // flagged but not opened yet
+        live.push(id);
       }
-      if(specTid!=null){ mode="lobby"; T=null; specTid=null; }        // none of them are live
+      liveCount=live.length;
+      if(!live.length){ if(specTid!=null) dropToLobby(); return; }
+
+      const onLive = mode==="spectate" && T && live.includes(specTid);
+      if(!onLive){ await switchTo(live[0]); return; }         // newest opt-in wins
+      if(live.length===1) return;                            // nothing to rotate to
+      if(Date.now()-lastSwitch < ROTATE_MS) return;           // dwell not elapsed
+      await switchTo(live[(live.indexOf(specTid)+1)%live.length]);
     }catch{}
   }
   function paintBar(p){
@@ -1946,7 +2028,8 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
       const cd = p.until? " · "+mmss(p.until-now) : "";
       const locks = Number(T.lockedMask).toString(2).split("1").length-1;
       const lockStr = (p.key==="spinning"||p.key==="locked") ? " · "+locks+"/6 locked" : "";
-      txt="TABLE "+tid+" · seats "+T.seatCount+"/12 · pot "+potStr+" TIMBS · "+p.label+cd+lockStr;
+      txt="TABLE "+tid+" · seats "+T.seatCount+"/12 · pot "+potStr+" TIMBS · "+p.label+cd+lockStr
+           +(liveCount>1? " · "+liveCount+" tables live":"");
     } else {
       txt='<span class="lob">no streamed table right now — the felt spins on</span>';
     }
