@@ -1676,11 +1676,16 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
   const bar=document.createElement("div"); bar.id="spectateBar"; document.body.appendChild(bar);
 
   const relaunch = () => {
-    const targets = Array.from({length:6}, () => ALPHABET[Math.floor(Math.random()*36)]);
     reelObjs.forEach(o => { o.settled = null; o.settleFrom = null; });
-    preview = { t0: performance.now(), targets };
+    // no targets: the lobby never settles — it holds the "balls are running" state
+    preview = { t0: performance.now(), targets: [null,null,null,null,null,null] };
   };
-  function lobbyFrame(){ if(!preview) relaunch(); driveSpin({key:"committed"}); }
+  const LOBBY_HOLD = 2200; // pin the envelope in the run (tau ≈ 0.34): perpetual spin, never the wire
+  function lobbyFrame(){
+    if (!preview) relaunch();
+    else if (performance.now() - preview.t0 > LOBBY_HOLD) preview.t0 = performance.now() - LOBBY_HOLD;
+    driveSpin({key:"committed"});
+  }
 
   async function initRO(){
     if(!ethers) return false;
