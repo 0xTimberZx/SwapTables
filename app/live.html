@@ -304,7 +304,7 @@
     .reel{max-width:none}
   }
 
-  /* ── ATTRACT / STREAM MODE ── clean ambient view of the spinning reels */
+  /* STREAMCSS: attract/stream mode — ambient view of the reels */
   body.attract{background:#07120c;overflow:hidden}
   body.attract .wrap{max-width:1040px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:0 24px}
   body.attract .wrap > *:not(#spin):not(#reveal){display:none !important}
@@ -326,6 +326,12 @@
   @keyframes livepulse{0%{box-shadow:0 0 0 0 rgba(67,217,142,.55)}70%{box-shadow:0 0 0 12px rgba(67,217,142,0)}100%{box-shadow:0 0 0 0 rgba(67,217,142,0)}}
   body.attract #streamFoot{display:block;position:fixed;bottom:16px;left:0;right:0;z-index:50;
     text-align:center;font-family:Georgia,serif;font-size:12.5px;color:#6f8579;letter-spacing:.05em}
+  body.attract #spectateBar{display:none;position:fixed;top:76px;right:0;z-index:60;
+    margin:0 34px;padding:10px 18px;border:1px solid rgba(247,240,214,.18);border-radius:10px;
+    background:rgba(7,18,12,.88);font-family:Georgia,serif;font-size:13.5px;color:#e8dcae;
+    letter-spacing:.03em;font-variant-numeric:tabular-nums}
+  body.attract #spectateBar.on{display:block}
+  body.attract #spectateBar .lob{color:#6f8579;font-style:italic}
 
 </style>
 </head>
@@ -510,8 +516,11 @@
 
 <script type="module">
 let ethers;
-try { ({ ethers } = await import("https://cdn.jsdelivr.net/npm/ethers@6.13.4/+esm")); }
-catch (e) { console.warn("[SwapTables] ethers unavailable — attract/offline mode", e); }
+try { ({ ethers } = await import("./vendor/ethers-6.13.4.min.js")); }
+catch (e1) {
+  try { ({ ethers } = await import("https://cdn.jsdelivr.net/npm/ethers@6.13.4/+esm")); }
+  catch (e2) { console.warn("[SwapTables] ethers unavailable — lobby-only mode", e2); }
+}
 
 const ADDR = {
   board:  "0x1633Fb6405b42835bb8f883a67B7968649c62257",
@@ -1640,23 +1649,109 @@ function updateTotals(){
   $("tTok").innerHTML=placedN+"<small>/6</small>";
   $("tDD").innerHTML=(Number(mySeat.ddChip)? CHIPS[Number(mySeat.ddChip)-1] : "—")+" <small>TIMBS</small>";
 }
-
-/* ── ATTRACT / STREAM MODE — auto-loops the spin; no wallet, no chain.
-      Enable with ?attract or #attract in the URL. ── */
+/* STREAMJS: attract/stream director.
+   ?attract          spectate a streamed table when one exists; else lobby loop
+   ?attract&lobby    lobby loop only (never spectates)
+   ?attract&table=N  pin table N (skip the registry)
+   ?attract&mock=1   fake table for offline testing
+   Opt-ins live in Supabase `stream_tables` (board, table_id, streamed). */
 if (location.hash.includes("attract") || new URLSearchParams(location.search).has("attract")) {
   document.body.classList.add("attract");
-  const PHASE = { key: "committed" };
+  const AQS = new URLSearchParams(location.search);
+  const LOBBY_ONLY = AQS.has("lobby"), PIN = AQS.get("table"), MOCK = AQS.has("mock");
+  const SB_URL = "https://ipyfodnidwsdvwqrcjrl.supabase.co";
+  const SB_KEY = "sb_publishable_yg4wjMwvGrlf5C9vqs2nkw_Hfks0Ux9";
+  const RPCS = [
+    "https://sepolia-rollup.arbitrum.io/rpc",
+    "https://arbitrum-sepolia-rpc.publicnode.com",
+    "https://arbitrum-sepolia.gateway.tenderly.co",
+  ];
+  let mode="lobby", specTid=null, ro=null, roBoard=null, roLedger=null, pot=null, lastBarTxt="";
+
+  const bar=document.createElement("div"); bar.id="spectateBar"; document.body.appendChild(bar);
+
   const relaunch = () => {
     const targets = Array.from({length:6}, () => ALPHABET[Math.floor(Math.random()*36)]);
     reelObjs.forEach(o => { o.settled = null; o.settleFrom = null; });
     preview = { t0: performance.now(), targets };
   };
-  relaunch();
-  (function attractLoop(){
-    if (!preview) relaunch();     // prior spin cleared (~9.5s) → immediately start the next
-    driveSpin(PHASE);
-    requestAnimationFrame(attractLoop);
+  function lobbyFrame(){ if(!preview) relaunch(); driveSpin({key:"committed"}); }
+
+  async function initRO(){
+    if(!ethers) return false;
+    for(const u of RPCS){
+      try{
+        const p=new ethers.JsonRpcProvider(u, 421614, {staticNetwork:true});
+        await p.getBlockNumber(); ro=p; break;
+      }catch{}
+    }
+    if(!ro) return false;
+    roBoard =new ethers.Contract(ADDR.board,  BOARD_ABI,  ro);
+    roLedger=new ethers.Contract(ADDR.ledger, LEDGER_ABI, ro);
+    dials={ entry:Number(await roBoard.entryWindow()), lead:Number(await roBoard.betsCloseLead()) };
+    return true;
+  }
+  async function registryPick(){
+    if(PIN!=null) return Number(PIN);
+    const r=await fetch(SB_URL+"/rest/v1/stream_tables"
+      +"?select=table_id,streamed,updated_at"
+      +"&board=eq."+ADDR.board.toLowerCase()
+      +"&streamed=eq.true&order=updated_at.desc&limit=3",
+      {headers:{apikey:SB_KEY}});
+    if(!r.ok) return null;
+    const rows=await r.json();
+    return rows.length? Number(rows[0].table_id) : null;
+  }
+  async function pollTable(){
+    if(MOCK || specTid==null || !roBoard) return;
+    try{
+      const [t,e]=await Promise.all([roBoard.tables(specTid), roLedger.tableEscrow(specTid)]);
+      if(t.openedAt===0n || t.retired){ mode="lobby"; T=null; specTid=null; return; }
+      T=t; tid=specTid; pot=e; mode="spectate";
+    }catch{}
+  }
+  async function director(){
+    if(LOBBY_ONLY || MOCK) return;
+    try{
+      if(!ro && !(await initRO())) return;
+      const pick=await registryPick();
+      if(pick==null){ if(specTid!=null){ mode="lobby"; T=null; specTid=null; } return; }
+      if(pick!==specTid){ specTid=pick; await pollTable(); }
+    }catch{}
+  }
+  function paintBar(p){
+    let txt;
+    if(mode==="spectate" && T && p){
+      const potStr = pot!=null ? Number(pot/(10n**18n)).toLocaleString() : "—";
+      const now=Math.floor(Date.now()/1000);
+      const cd = p.until? " · "+mmss(p.until-now) : "";
+      const locks = Number(T.lockedMask).toString(2).split("1").length-1;
+      const lockStr = (p.key==="spinning"||p.key==="locked") ? " · "+locks+"/6 locked" : "";
+      txt="TABLE "+tid+" · seats "+T.seatCount+"/12 · pot "+potStr+" TIMBS · "+p.label+cd+lockStr;
+    } else {
+      txt='<span class="lob">no streamed table right now — the felt spins on</span>';
+    }
+    if(txt!==lastBarTxt){ bar.innerHTML=txt; lastBarTxt=txt; }
+    bar.classList.add("on");
+  }
+  if(MOCK){
+    const now=BigInt(Math.floor(Date.now()/1000));
+    dials={entry:2400,lead:295};
+    T={ openedAt:now-3300n, pickTime:now+45n, lockBlock:0n, seedRound:7,
+        seatCount:5, lockedMask:0, ddSettled:false, retired:false,
+        seedString:"0x414243313233", lockedChars:"0x000000000000" };
+    tid=99; specTid=99; pot=1240n*(10n**18n); mode="spectate";
+  }
+  (function directorLoop(){
+    if(mode==="spectate" && T){
+      const p=phaseOf();
+      if(["committed","ready","spinning","locked","done"].includes(p.key)) driveSpin(p);
+      else lobbyFrame();               /* entry/betting: ambient reels + real countdown in the bar */
+      paintBar(p);
+    } else { lobbyFrame(); paintBar(null); }
+    requestAnimationFrame(directorLoop);
   })();
+  if(!MOCK && !LOBBY_ONLY){ setInterval(pollTable,12000); setInterval(director,25000); director(); }
 }
 
 </script>
