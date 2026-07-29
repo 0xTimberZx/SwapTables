@@ -157,6 +157,14 @@
     </div>
 
     <div class="row" style="margin-top:14px">
+      <button id="streamTog" class="ghost" style="flex:0 0 auto">📡 Stream this table</button>
+      <span class="pill" id="streamPill" style="display:none">on the broadcast</span>
+    </div>
+    <p class="note">Broadcasting is opt-in and off-chain: it only tells the public
+      stream page to spectate this table (read-only). Bets, seats and payouts are
+      unaffected. Toggle it off any time.</p>
+
+    <div class="row" style="margin-top:14px">
       <button id="cancel" class="danger" style="flex:0 0 auto" disabled>Cancel table (refund all)</button>
     </div>
     <p class="note">Only for a table that can never be armed: entry closed with fewer
@@ -818,6 +826,45 @@ $("runSettle").onclick = async () => {
 };
 
 log("Connect a wallet to begin.", "l-dim");
+
+// ── broadcast opt-in — Supabase stream_tables registry (off-chain, read-only spectate) ──
+const SB_URL="https://ipyfodnidwsdvwqrcjrl.supabase.co";
+const SB_KEY="sb_publishable_yg4wjMwvGrlf5C9vqs2nkw_Hfks0Ux9";
+const SB_HDRS={apikey:SB_KEY, Authorization:"Bearer "+SB_KEY};
+let streamedNow=null;
+function paintStream(){
+  const b=$("streamTog"), p=$("streamPill");
+  if(streamedNow===null){ b.textContent="📡 Stream this table"; p.style.display="none"; return; }
+  b.textContent = streamedNow? "Stop broadcasting" : "📡 Stream this table";
+  p.style.display = streamedNow? "" : "none";
+}
+async function streamStatus(){
+  try{
+    const r=await fetch(SB_URL+"/rest/v1/stream_tables?select=streamed"
+      +"&board=eq."+ADDR.board.toLowerCase()+"&table_id=eq."+tid(),{headers:SB_HDRS});
+    const rows=r.ok? await r.json():[];
+    streamedNow = rows.length? !!rows[0].streamed : false;
+  }catch{ streamedNow=null; }
+  paintStream();
+}
+$("streamTog").onclick=async()=>{
+  const target = streamedNow!==true;
+  try{
+    const r=await fetch(SB_URL+"/rest/v1/stream_tables",{
+      method:"POST",
+      headers:{...SB_HDRS,"Content-Type":"application/json",Prefer:"resolution=merge-duplicates"},
+      body:JSON.stringify({board:ADDR.board.toLowerCase(), table_id:Number(tid()),
+                           streamed:target, initiator:(typeof me!=="undefined"&&me)? me:null}),
+    });
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    streamedNow=target; paintStream();
+    log(target? "table "+tid()+" is on the live broadcast — the stream page will pick it up within ~30s"
+              : "table "+tid()+" removed from the broadcast — stream falls back to the lobby", "ok");
+  }catch(e){ log("stream toggle failed: "+(e.message||e), "err"); }
+};
+$("tableId").addEventListener("change", streamStatus);
+streamStatus(); setInterval(streamStatus, 30000);
+
 </script>
 </body>
 </html>

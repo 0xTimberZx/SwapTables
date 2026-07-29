@@ -1697,7 +1697,7 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
       +"?select=table_id,streamed,updated_at"
       +"&board=eq."+ADDR.board.toLowerCase()
       +"&streamed=eq.true&order=updated_at.desc&limit=3",
-      {headers:{apikey:SB_KEY}});
+      {headers:{apikey:SB_KEY, Authorization:"Bearer "+SB_KEY}});
     if(!r.ok) return null;
     const rows=await r.json();
     return rows.length? Number(rows[0].table_id) : null;
