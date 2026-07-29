@@ -1895,16 +1895,19 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
     dials={ entry:Number(await roBoard.entryWindow()), lead:Number(await roBoard.betsCloseLead()) };
     return true;
   }
+  /// Candidate list, newest opt-in first. The director walks it and takes the
+  /// first table that is actually live on chain, so a retired table left flagged
+  /// in the registry can never block a younger one (or flap the stream).
   async function registryPick(){
-    if(PIN!=null) return Number(PIN);
+    if(PIN!=null) return [Number(PIN)];
     const r=await fetch(SB_URL+"/rest/v1/stream_tables"
       +"?select=table_id,streamed,updated_at"
       +"&board=eq."+ADDR.board.toLowerCase()
-      +"&streamed=eq.true&order=updated_at.desc&limit=3",
+      +"&streamed=eq.true&order=updated_at.desc&limit=8",
       {headers:{apikey:SB_KEY, Authorization:"Bearer "+SB_KEY}});
     if(!r.ok) return null;
     const rows=await r.json();
-    return rows.length? Number(rows[0].table_id) : null;
+    return rows.map(x=>Number(x.table_id));
   }
   async function pollTable(){
     if(MOCK || specTid==null || !roBoard) return;
@@ -1914,13 +1917,25 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
       T=t; tid=specTid; pot=e; mode="spectate";
     }catch{}
   }
+  function midPick(){
+    return mode==="spectate" && T && !T.retired
+        && T.lockBlock!==0n && Number(T.lockedMask)!==0x3F;
+  }
   async function director(){
     if(LOBBY_ONLY || MOCK) return;
     try{
       if(!ro && !(await initRO())) return;
-      const pick=await registryPick();
-      if(pick==null){ if(specTid!=null){ mode="lobby"; T=null; specTid=null; } return; }
-      if(pick!==specTid){ specTid=pick; resetSpecFeed(); await pollTable(); await pollBets(true); }
+      if(midPick()) return;                        // never cut away mid-pick
+      const cands=await registryPick();
+      if(!cands || !cands.length){ if(specTid!=null){ mode="lobby"; T=null; specTid=null; } return; }
+      if(mode==="spectate" && T && cands.includes(specTid)) return;   // current table still opted in
+      for(const id of cands){
+        let t; try{ t=await roBoard.tables(id); }catch{ continue; }
+        if(t.openedAt===0n || t.retired) continue; // stale flag → try the next candidate
+        if(id!==specTid){ specTid=id; resetSpecFeed(); await pollTable(); await pollBets(true); }
+        return;
+      }
+      if(specTid!=null){ mode="lobby"; T=null; specTid=null; }        // none of them are live
     }catch{}
   }
   function paintBar(p){
