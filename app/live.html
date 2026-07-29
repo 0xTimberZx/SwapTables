@@ -332,6 +332,37 @@
     letter-spacing:.03em;font-variant-numeric:tabular-nums}
   body.attract #spectateBar.on{display:block}
   body.attract #spectateBar .lob{color:#6f8579;font-style:italic}
+  /* spectate: live bet ticker (left) + pools & odds panel (right) */
+  #betFeed,#poolPanel{display:none}
+  body.attract #betFeed{display:block;position:fixed;left:28px;bottom:64px;z-index:60;width:390px;
+    font-family:Georgia,serif;pointer-events:none}
+  body.attract #betFeed .brow{display:flex;gap:10px;align-items:baseline;padding:7px 12px;margin-top:6px;
+    border:1px solid rgba(247,240,214,.14);border-radius:9px;background:rgba(7,18,12,.88);
+    font-size:13px;color:#dfe7df;animation:betin .5s ease}
+  body.attract #betFeed .brow.hot{border-color:rgba(215,179,76,.65);box-shadow:0 0 14px rgba(215,179,76,.18)}
+  body.attract #betFeed .brow.settle{border-color:rgba(67,217,142,.5);color:#bfe9d2}
+  body.attract #betFeed .bwho{color:#9fb4a4;min-width:56px}
+  body.attract #betFeed .bseg{color:#e8dcae;font-weight:700;letter-spacing:.04em;min-width:52px}
+  body.attract #betFeed .bpick b{color:#f7f0d6}
+  body.attract #betFeed .bamt{margin-left:auto;font-weight:800;color:#f7f0d6}
+  body.attract #betFeed .bamt .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;
+    vertical-align:baseline}
+  @keyframes betin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  body.attract #poolPanel{display:block;position:fixed;right:28px;top:128px;z-index:60;width:330px;
+    font-family:Georgia,serif;border:1px solid rgba(247,240,214,.16);border-radius:11px;
+    background:rgba(7,18,12,.88);padding:10px 14px 12px;pointer-events:none}
+  body.attract #poolPanel h3{margin:0 0 2px;font-size:11.5px;letter-spacing:.14em;color:#8fa295;
+    text-transform:uppercase;font-weight:700}
+  body.attract #poolPanel .prow{display:flex;gap:8px;align-items:baseline;padding:5.5px 0;
+    border-bottom:1px solid rgba(247,240,214,.07);font-size:12.5px;color:#c9d6cb}
+  body.attract #poolPanel .prow:last-child{border-bottom:none}
+  body.attract #poolPanel .pseg{color:#e8dcae;font-weight:700;min-width:44px;letter-spacing:.04em}
+  body.attract #poolPanel .ppot{font-weight:800;color:#f7f0d6;min-width:64px}
+  body.attract #poolPanel .pmeta{margin-left:auto;color:#8fa295;font-size:11.5px;text-align:right}
+  body.attract #poolPanel .prow.done .pseg{color:#43d98e}
+  body.attract #poolPanel .prow.done .pmeta{color:#43d98e}
+  body.attract #betFeed,body.attract #poolPanel{opacity:0;transition:opacity .6s}
+  body.attract #betFeed.on,body.attract #poolPanel.on{opacity:1}
 
 </style>
 </head>
@@ -1414,7 +1445,7 @@ function driveSpin(p){
     : "The pick is armed — each ball drops as its segment locks on chain.";
 }
 function lockedCharsArr(){
-  if(!T) return [null,null,null,null,null,null];
+  if(!T || !ethers) return [null,null,null,null,null,null];
   const mask=Number(T.lockedMask);
   const raw=ethers.getBytes(T.lockedChars);
   const out=[];
@@ -1674,6 +1705,108 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
   let mode="lobby", specTid=null, ro=null, roBoard=null, roLedger=null, pot=null, lastBarTxt="";
 
   const bar=document.createElement("div"); bar.id="spectateBar"; document.body.appendChild(bar);
+  const bfeed=document.createElement("div"); bfeed.id="betFeed";  document.body.appendChild(bfeed);
+  const ppan =document.createElement("div"); ppan.id="poolPanel"; document.body.appendChild(ppan);
+
+  // ── spectate book: everything the ticker + pools panel know ──
+  let specBook, specSeen, packCacheS, settledS;
+  function resetSpecFeed(){
+    specBook=Array.from({length:7},()=>[]); specSeen=new Set(); packCacheS={}; settledS={};
+    bfeed.innerHTML=""; renderPools();
+  }
+  const fmtC=x=>x.toLocaleString(undefined,{maximumFractionDigits:2});
+  function addSpecBet(wallet,pool,kind,pick,amt,hot){
+    specBook[pool].push({wallet,kind,pick,amt:amt||0});
+    const spec=specOf(kind,pick);
+    const row=document.createElement("div");
+    row.className="brow"+(hot?" hot":"");
+    row.innerHTML='<span class="bwho">'+tagOf(wallet)+'</span>'
+      +'<span class="bseg">'+(kind===KIND.DD?"ROUND":"SEG "+(pool+1))+'</span>'
+      +'<span class="bpick">on <b>'+spec.name+'</b>'+(kind===KIND.DD?"":" · "+fair(spec.count)+"×")+'</span>'
+      +'<span class="bamt">'+(amt?'<span class="dot" style="background:'+(CHIPCOLOR[amt]||"#565b66")+'"></span>'+amt:"·")+'</span>';
+    bfeed.appendChild(row);
+    while(bfeed.children.length>7) bfeed.removeChild(bfeed.firstChild);
+    if(hot) setTimeout(()=>row.classList.remove("hot"), 4200);
+    renderPools();
+  }
+  function addSettleRow(pool,pot,dist){
+    settledS[pool]={pot,dist};
+    const row=document.createElement("div");
+    row.className="brow settle";
+    row.innerHTML='<span class="bseg">'+(pool===6?"ROUND":"SEG "+(pool+1))+'</span>'
+      +'<span class="bpick">settled — <b>'+fmtC(dist)+' TIMBS</b> paid to winners</span>'
+      +'<span class="bamt">✓</span>';
+    bfeed.appendChild(row);
+    while(bfeed.children.length>7) bfeed.removeChild(bfeed.firstChild);
+    renderPools();
+  }
+  function poolStatsS(pool){
+    const bets=specBook[pool];
+    const chips=bets.reduce((a,b)=>a+b.amt,0);
+    const n=bets.length;
+    const contested=n>=2;
+    const pot=chips+(contested? SEED_SHARE:0);
+    const rakeBps=n? 175+Math.floor(625/n):0;
+    return {n,chips,contested,pot,rakeBps,dist:pot*(10000-rakeBps)/10000};
+  }
+  function renderPools(){
+    if(!specBook) return;
+    let h="<h3>Pools · live</h3>";
+    for(let i=0;i<7;i++){
+      const st=poolStatsS(i), done=settledS[i];
+      const name=i===6?"ROUND":"SEG "+(i+1);
+      if(done){
+        h+='<div class="prow done"><span class="pseg">'+name+'</span>'
+          +'<span class="ppot">'+fmtC(done.pot)+'</span>'
+          +'<span class="pmeta">settled · '+fmtC(done.dist)+' paid ✓</span></div>';
+      } else if(st.n===0){
+        h+='<div class="prow"><span class="pseg">'+name+'</span>'
+          +'<span class="ppot">—</span><span class="pmeta">no bets yet</span></div>';
+      } else {
+        h+='<div class="prow"><span class="pseg">'+name+'</span>'
+          +'<span class="ppot">'+fmtC(st.pot)+'</span>'
+          +'<span class="pmeta">'+st.n+' bet'+(st.n===1?"":"s")+' · rake '+(st.rakeBps/100).toFixed(2)+"%"
+          +(st.contested?" · → ~"+fmtC(st.dist):" · uncontested")+'</span></div>';
+      }
+    }
+    ppan.innerHTML=h;
+  }
+  async function specAmt(wallet,pool,kind){
+    try{
+      if(kind===KIND.DD){
+        const st=await roBoard.seats(specTid,wallet);
+        return Number(st.ddChip)? CHIPS[Number(st.ddChip)-1]:0;
+      }
+      let pack=packCacheS[wallet];
+      if(pack==null){ const st=await roBoard.seats(specTid,wallet); pack=st.chipPack; packCacheS[wallet]=pack; }
+      const byte=Number(pack>>BigInt(8*pool)&0xFFn);
+      return byte? CHIPS[byte-1]:0;
+    }catch{ return 0; }
+  }
+  let betsBusy=false;
+  async function pollBets(first){
+    if(MOCK || mode!=="spectate" || specTid==null || !roBoard || betsBusy) return; betsBusy=true;
+    try{
+      const latest=await ro.getBlockNumber();
+      const from=Math.max(0, latest-400000);
+      const evs=await roBoard.queryFilter(roBoard.filters.BetPlaced(specTid), from, latest);
+      for(const ev of evs){
+        const key=ev.transactionHash+":"+ev.index;
+        if(specSeen.has(key)) continue; specSeen.add(key);
+        const pool=Number(ev.args.pool), kind=Number(ev.args.kind), pick=Number(ev.args.pick);
+        const amt=await specAmt(ev.args.wallet, pool, kind);
+        addSpecBet(ev.args.wallet, pool, kind, pick, amt, !first);
+      }
+      const sevs=await roBoard.queryFilter(roBoard.filters.PoolSettled(specTid), from, latest);
+      for(const ev of sevs){
+        const key="s:"+ev.transactionHash+":"+ev.index;
+        if(specSeen.has(key)) continue; specSeen.add(key);
+        const pool=Number(ev.args.pool);
+        addSettleRow(pool, Number(ev.args.pot/(10n**18n)), Number(ev.args.distributed/(10n**18n)));
+      }
+    }catch{}finally{ betsBusy=false; }
+  }
+  resetSpecFeed();
 
   const relaunch = () => {
     reelObjs.forEach(o => { o.settled = null; o.settleFrom = null; });
@@ -1726,7 +1859,7 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
       if(!ro && !(await initRO())) return;
       const pick=await registryPick();
       if(pick==null){ if(specTid!=null){ mode="lobby"; T=null; specTid=null; } return; }
-      if(pick!==specTid){ specTid=pick; await pollTable(); }
+      if(pick!==specTid){ specTid=pick; resetSpecFeed(); await pollTable(); await pollBets(true); }
     }catch{}
   }
   function paintBar(p){
@@ -1753,6 +1886,9 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
     tid=99; specTid=99; pot=1240n*(10n**18n); mode="spectate";
   }
   (function directorLoop(){
+    const specOn = (mode==="spectate" && !!T);
+    bfeed.classList.toggle("on", specOn);
+    ppan.classList.toggle("on", specOn);
     if(mode==="spectate" && T){
       const p=phaseOf();
       if(["committed","ready","spinning","locked","done"].includes(p.key)) driveSpin(p);
@@ -1761,7 +1897,19 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
     } else { lobbyFrame(); paintBar(null); }
     requestAnimationFrame(directorLoop);
   })();
-  if(!MOCK && !LOBBY_ONLY){ setInterval(pollTable,12000); setInterval(director,25000); director(); }
+  if(!MOCK && !LOBBY_ONLY){ setInterval(pollTable,12000); setInterval(()=>pollBets(false),12000); setInterval(director,25000); director(); }
+  if(MOCK){
+    // demo drip: fake bets + a settlement so the panels can be seen without a chain
+    const W=["0x8a21f39cD47cad55f5a2E3c1b45090aeC65b21aa","0x4b7C09fA33210d8be24C11C4680891C377bBe1cd",
+             "0x9dE3aB44F210FF08c31e0a9C556677f9012Ccf3e","0x2f664411abD00Ff17690EeAa1C63920fA1c778Be"];
+    const DEMO=[[0,KIND.EXACTLY,16,50],[2,KIND.COLOR,0,25],[1,KIND.DOZEN,1,100],[0,KIND.EXACTLY,3,25],
+                [4,KIND.LOWHIGH,1,10],[6,KIND.DD,0,50],[2,KIND.EXACTLY,30,500],[3,KIND.VOWELS,0,25]];
+    let di=0;
+    setInterval(()=>{
+      if(di<DEMO.length){ const [p,k,pk,a]=DEMO[di]; addSpecBet(W[di%4],p,k,pk,a,true); di++; }
+      else if(di===DEMO.length){ addSettleRow(0, 82.3, 76.1); di++; }
+    }, 1300);
+  }
 }
 
 </script>
