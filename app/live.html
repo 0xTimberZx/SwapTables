@@ -373,6 +373,14 @@
   #switchScrim .sw-k{font-size:14px;letter-spacing:.36em;text-transform:uppercase;color:#8fa295}
   #switchScrim .sw-t{margin-top:16px;font-size:56px;font-weight:800;color:#f7f0d6;letter-spacing:.01em}
   #switchScrim .sw-s{margin-top:18px;font-size:14.5px;color:#7d9186;font-style:italic}
+  /* live viewer count — deliberately faint, top-right */
+  #viewCount{display:none}
+  body.attract #viewCount{display:flex;position:fixed;top:23px;right:28px;z-index:70;
+    align-items:center;gap:7px;padding:5px 12px;border-radius:999px;
+    border:1px solid rgba(247,240,214,.13);background:rgba(7,18,12,.4);
+    font-family:Georgia,serif;font-size:14px;color:#cddbd0;opacity:.7;pointer-events:none}
+  body.attract #viewCount .n{font-weight:800;color:#f7f0d6;font-variant-numeric:tabular-nums}
+  body.attract #viewCount.hide{display:none}
   /* spectate: the REAL board, ghosted in behind the meter — coins land from the feed */
   body.attract .felt-scroll{display:none !important}
   body.attract.spec .wrap{justify-content:flex-start;padding-top:96px}
@@ -2044,6 +2052,46 @@ if (location.hash.includes("attract") || new URLSearchParams(location.search).ha
         seedString:"0x414243313233", lockedChars:"0x000000000000" };
     tid=99; specTid=99; pot=1240n*(10n**18n); mode="spectate";
   }
+  // ── live presence: one heartbeat row per open tab, counted over a 60s window ──
+  const VIEW_TTL_S=60, VIEW_HB_MS=20000, VIEW_POLL_MS=15000;
+  let sid;
+  try{
+    sid=sessionStorage.getItem("swaptables.sid");
+    if(!sid){ sid=(crypto.randomUUID? crypto.randomUUID()
+                 : "s"+Math.random().toString(36).slice(2)+Date.now().toString(36));
+              sessionStorage.setItem("swaptables.sid",sid); }
+  }catch{ sid="s"+Math.random().toString(36).slice(2); }
+
+  const eye=document.createElement("div"); eye.id="viewCount"; eye.className="hide";
+  eye.innerHTML='<span aria-hidden="true">\u{1F441}</span><span class="n">—</span>';
+  document.body.appendChild(eye);
+
+  const hereTid = () => (mode==="spectate" && specTid!=null) ? specTid : null;
+  async function beat(){
+    try{
+      await fetch(SB_URL+"/rest/v1/stream_presence",{method:"POST",
+        headers:{...SB_HDRS,"Content-Type":"application/json",Prefer:"resolution=merge-duplicates"},
+        body:JSON.stringify({sid, board:ADDR.board.toLowerCase(),
+                             table_id:hereTid(), seen_at:new Date().toISOString()})});
+    }catch{}
+  }
+  async function countViewers(){
+    try{
+      const since=new Date(Date.now()-VIEW_TTL_S*1000).toISOString();
+      const r=await fetch(SB_URL+"/rest/v1/stream_presence"
+        +"?select=sid,table_id&seen_at=gt."+since+"&limit=500",{headers:SB_HDRS});
+      if(!r.ok) return;
+      const rows=await r.json();
+      const total=rows.length, t=hereTid();
+      const here=t!=null? rows.filter(x=>Number(x.table_id)===t).length : 0;
+      eye.querySelector(".n").textContent=total;
+      eye.title=total+" watching"+(t!=null? " · "+here+" on TABLE "+t : "");
+      eye.classList.toggle("hide", total<1);
+    }catch{}
+  }
+  beat(); countViewers();
+  setInterval(beat, VIEW_HB_MS); setInterval(countViewers, VIEW_POLL_MS);
+
   let wasSpec=null;
   (function directorLoop(){
     const specOn = (mode==="spectate" && !!T);
