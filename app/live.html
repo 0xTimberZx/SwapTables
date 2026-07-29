@@ -1657,6 +1657,11 @@ function updateTotals(){
    Opt-ins live in Supabase `stream_tables` (board, table_id, streamed). */
 if (location.hash.includes("attract") || new URLSearchParams(location.search).has("attract")) {
   document.body.classList.add("attract");
+  // tap anywhere → toggle fullscreen (hides the browser chrome for a clean broadcast)
+  document.addEventListener("click", () => {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(()=>{});
+    else document.exitFullscreen?.();
+  });
   const AQS = new URLSearchParams(location.search);
   const LOBBY_ONLY = AQS.has("lobby"), PIN = AQS.get("table"), MOCK = AQS.has("mock");
   const SB_URL = "https://ipyfodnidwsdvwqrcjrl.supabase.co";
