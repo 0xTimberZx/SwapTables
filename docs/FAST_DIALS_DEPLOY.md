@@ -9,8 +9,9 @@ Drafted 2026-07-30, after the first two stream sessions (Twitch + Kick). Status:
 | `PoolLedger` | `0x863e37FF91cbd745CBcb063266Bf0631Ce2546b5` |
 | `CommitRevealEntropy` | `0xe926797b2FC03E2936092D3de2B4c7ADE2e4A5Fd` |
 
-`setBoard` and `addWriter` ran in-script. Step-3 wiring (whitelist + seed
-approve) and the step-5 smoke test follow.
+`setBoard` and `addWriter` ran in-script. Step-3 wiring complete same day:
+ledger whitelisted on TIMBS and 2000 TIMBS seed budget approved from the
+funder. The board is fully playable; step-5 smoke test is next.
 
 ## Why
 
