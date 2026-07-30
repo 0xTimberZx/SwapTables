@@ -1,7 +1,7 @@
 # Fast-dials generation — deploy runbook
 
 Drafted 2026-07-30, after the first two stream sessions (Twitch + Kick). Status:
-**prepared, not executed** — every step below is copy-paste ready; nothing runs
+**gen-3 close-out complete (all tables retired, escrow 0) — ready to execute** — every step below is copy-paste ready; nothing runs
 until the operator runs it.
 
 ## Why
@@ -70,7 +70,7 @@ TIMB_PRIZE_ADDRESS=0x35976f4D2260127848a6274D2eC89ee054412432
 TREASURY_ADDRESS=0xd3F40042aFA8074EA68C9f61dE6aDADD539F0D5c
 SEED_FUNDER_ADDRESS=0x42536623b503D4926DfAF6173B0357b7DfD19800   # ops EOA — must be able to approve()
 SEED_REGISTRY_ADDRESS=0x2460C8ed63414F36838542982A5Ab263C9Fcb914  # REUSE — never redeploy
-# GUARDIAN_ADDRESS=0x...            # optional halt-only guardian; omit for none
+GUARDIAN_ADDRESS=0x42536623b503D4926DfAF6173B0357b7DfD19800   # halt-only guardian — same as gen-3
 ENTRY_WINDOW_SECONDS=900
 PICK_DELAY_SECONDS=1500
 BETS_CLOSE_SECONDS=300
