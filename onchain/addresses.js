@@ -6,18 +6,17 @@ export const ADDRESSES = {
   arbitrumSepolia: {
     chainId: 421614,
 
-    // ── SwapTables board, generation 3 (live) ──────────────────────────────
+    // ── SwapTables board, generation 4 — fast dials (live) ─────────────────
     //
-    // PRODUCTION DIALS, first time on chain: entry closes 40:00, bets close
-    // 55:00, pick 59:55 (2400 / 3595 / 295, §10.3). A full round is ~60 min.
-    // This generation carries the per-table escrow ledger: money is tracked
-    // per table (tableEscrow), sweeps are sweepTable(to, tableId) with no
-    // amount parameter, and cancelTable returns the seed to seedFunder.
-    // Deployed 2026-07-28; fixes VALIDATION.md discovery #11.
-    SegmentBoard: "0x1633Fb6405b42835bb8f883a67B7968649c62257", // state machine + pari-mutuel settlement
-    PoolLedger:   "0x5ee3d08FEFeFE08d8dDf09386E987Df23dbe105C", // custodies chips PER TABLE; credits + pays winners
+    // STREAM DIALS: entry closes 15:00, bets close 20:00, pick 25:00
+    // (900 / 1500 / 300). A full round is ~25 min + the staggered reveals.
+    // Same code as gen-3 (per-table escrow, cancel returns seed to funder);
+    // only the three timing dials changed. Deployed 2026-07-30, see
+    // SwapTables/docs/FAST_DIALS_DEPLOY.md for the run.
+    SegmentBoard: "0x57d5BE0203Fa30f7b99853a11e4D162824895F91", // state machine + pari-mutuel settlement
+    PoolLedger:   "0x863e37FF91cbd745CBcb063266Bf0631Ce2546b5", // custodies chips PER TABLE; credits + pays winners
     SeedRegistry: "0x2460C8ed63414F36838542982A5Ab263C9Fcb914", // long-lived ACROSS generations — never redeploy
-    CommitRevealEntropy: "0x9aF8683d9FCf593F553fA5FED58E03e5F85e3564", // swappable for VRF later
+    CommitRevealEntropy: "0xe926797b2FC03E2936092D3de2B4c7ADE2e4A5Fd", // swappable for VRF later
     SegmentCrank: "0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D", // stateless lock/retire batcher — permissionless, generation-AGNOSTIC: survives redeploys
 
     // ── TimbSwap protocol ──────────────────────────────────────────────────
@@ -49,6 +48,14 @@ export const ADDRESSES = {
 // ── Retired — do not wire anything to these ────────────────────────────────
 export const RETIRED = {
   arbitrumSepolia: {
+    // gen 3: nothing broken — superseded 2026-07-30 for dial speed only
+    // (40-min entry read as dead air on stream). Escrow accounting sound;
+    // ledger still pays withdrawals of remaining credits forever.
+    gen3: {
+      SegmentBoard: "0x1633Fb6405b42835bb8f883a67B7968649c62257",
+      PoolLedger:   "0x5ee3d08FEFeFE08d8dDf09386E987Df23dbe105C",
+      CommitRevealEntropy: "0x9aF8683d9FCf593F553fA5FED58E03e5F85e3564",
+    },
     // gen 0: treasury was also the seed funder, so openTable could never fund.
     gen0: {
       SegmentBoard: "0xD1ba5099A05f87418A3E323F00f7B360f21a456F",

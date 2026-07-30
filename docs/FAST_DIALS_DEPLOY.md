@@ -1,8 +1,16 @@
 # Fast-dials generation — deploy runbook
 
 Drafted 2026-07-30, after the first two stream sessions (Twitch + Kick). Status:
-**gen-3 close-out complete (all tables retired, escrow 0) — ready to execute** — every step below is copy-paste ready; nothing runs
-until the operator runs it.
+**EXECUTED 2026-07-30** — deployed to Arbitrum Sepolia (5,108,201 gas, ~0.0001 ETH):
+
+| Contract | Address |
+|---|---|
+| `SegmentBoard` | `0x57d5BE0203Fa30f7b99853a11e4D162824895F91` |
+| `PoolLedger` | `0x863e37FF91cbd745CBcb063266Bf0631Ce2546b5` |
+| `CommitRevealEntropy` | `0xe926797b2FC03E2936092D3de2B4c7ADE2e4A5Fd` |
+
+`setBoard` and `addWriter` ran in-script. Step-3 wiring (whitelist + seed
+approve) and the step-5 smoke test follow.
 
 ## Why
 
