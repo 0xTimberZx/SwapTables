@@ -1,6 +1,9 @@
 # Gen-6 — tip the dealer
 
-Draft, 2026-07-31. **Spec for review; nothing built.** Operator's ask, verbatim:
+Draft, 2026-07-31. **Status: IMPLEMENTED 2026-07-31** on TimbSwap branch
+`claude/company-emblem-card-6xcyz2` (`tipDealer` + `PoolLedger.moveCredit` +
+`opener` field; tests in `SegmentBoardGen6.t.sol`). Forge run pending; not
+deployed. Operator's ask, verbatim:
 *"The one who opens the board can get tipped by ppl who sat as well, by the end
 of the game, after the locks."* Companion to `UNDERWRITE_SPEC.md` (M1) and
 `GAME_ECONOMY.md` (M2–M5) — this is **M6**, and like them it is an accounting

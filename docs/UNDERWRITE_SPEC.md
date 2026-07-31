@@ -1,8 +1,14 @@
 # Uncontested pools — underwriting thin tables
 
-Draft, 2026-07-31. **Spec for review; nothing built.** Written after the gen-4
-sessions, from a question with an ugly answer: *what does a solo player get for
-landing a single letter?*
+Draft, 2026-07-31. **Status: Layers 0-2 IMPLEMENTED 2026-07-31** as gen-6, on
+TimbSwap branch `claude/company-emblem-card-6xcyz2` (`UnderwriteReserve.sol` +
+board/ledger changes + `SegmentBoardGen6.t.sol`); Layer 0 shipped earlier in
+gen-5. Forge run pending; not deployed. Open questions 2 and 3 answered by the
+operator, 2026-07-31: **Double-Digit is NOT underwritten** (round-wide, rarest
+outcome — the Rolling Jackpot M2 is its mechanism), and **no wallet is
+excluded** from top-ups (one rule for everyone; grinding cannot profit at
+RTP 0.90). Originally written after the gen-4 sessions, from a question with
+an ugly answer: *what does a solo player get for landing a single letter?*
 
 ## The problem, measured
 
