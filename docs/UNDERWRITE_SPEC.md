@@ -196,9 +196,13 @@ Money now enters a pool from **outside** at settle time, which is new. The
 
 ## Treasury backstop (operator-approved)
 
-The reserve is **seeded and backstopped by Treasury** — the operator has
-explicitly approved parking TIMBS outside Treasury and pulling from it when
-the reserve runs thin. Forfeit routing keeps it self-funding in expectation
+The reserve is **seeded and backstopped by Treasury, within a budget** — the
+operator has approved parking TIMBS outside Treasury and pulling from it when
+the reserve runs thin, with one hard rule: **nothing is minted.** Cumulative
+Treasury support may never exceed what the game has paid Treasury in rake and
+sweeps — subsidies are recycled earnings, not inflation (`GAME_ECONOMY.md`,
+solvency rule). If the budget is exhausted, the caps bind and payouts floor at
+par — settlement never depends on Treasury generosity. Forfeit routing keeps it self-funding in expectation
 (~10% of solo turnover accretes, sim-checked over 200k rounds with negligible
 drawdown); Treasury absorbs early variance and any cap-shortfall events, via
 the same approve/transferFrom pattern as the table seed.

@@ -31,9 +31,19 @@ stakes ──┬─ winners ──────────────── pus
          └─ CONTESTED no-winner ──┬─ half → la partage credit (back to that pool's bettors)
             pots                  └─ half → Rolling Jackpot
 seed ────── per table from funder ── unchanged (§9 guards intact)
-Treasury ─┬─ seeds + backstops the UnderwriteReserve   (operator-approved)
-          └─ optional jackpot bonus drops for events   (operator-approved)
+Treasury ─┬─ seeds + backstops the UnderwriteReserve   (operator-approved, budgeted)
+          └─ optional jackpot bonus drops for events   (operator-approved, budgeted)
 ```
+
+**Solvency rule — no minting, only recycling.** TIMBS is never created for
+these mechanisms. Treasury's contributions to the reserve and jackpot are
+budgeted from what the game itself has *earned*: cumulative
+`Treasury → (reserve + jackpot)` must never exceed cumulative
+`(rake + sweeps) → Treasury`. The game economy is closed — subsidies are
+deferred revenue given back, not inflation. In lean periods the caps simply
+bind sooner (payouts floor at par and pool money); in busy periods the rake
+funds the wiggle room. Track it as two running counters on the reserve
+contract so the invariant is checkable on-chain, not just policy.
 
 Why the split is shaped this way (sim-verified): la partage on *solo* pools
 would bleed the reserve dry (net −0.39 per staked TIMBS on a long shot) —
@@ -124,8 +134,9 @@ two distinct wallets.** One rule, four mechanisms.
 1. Jackpot slice percentage and floor (20% / 50 TIMBS are placeholders).
 2. Does la partage credit auto-stake into the encore round (stickier, but more
    contract surface) or sit as withdrawable credit (simpler, chosen for now)?
-3. ~~Should the jackpot accept outside top-ups?~~ **Answered: yes.** The
-   operator has approved routing TIMBS from Treasury into both the reserve and
-   the jackpot. Bonus drops become a stream-event tool ("tonight's jackpot is
-   boosted"). The jackpot still needs a guardian + halt, since it now custodies
-   meaningful TIMBS.
+3. ~~Should the jackpot accept outside top-ups?~~ **Answered: yes, budgeted.**
+   Treasury may route TIMBS into the reserve and jackpot, bounded by the
+   solvency rule above — only earned revenue is recycled, never minted. Bonus
+   drops become a stream-event tool ("tonight's jackpot is boosted"), sized by
+   what the rake has actually brought in. The jackpot still needs a guardian +
+   halt, since it custodies meaningful TIMBS.
