@@ -896,8 +896,10 @@ function paintSeat(){
   $("chips").classList.toggle("locked", loadedOnChain);
   $("loadBtn").disabled = loadedOnChain || Object.keys(localChips).length!==6 || p.key!=="entry";
   $("loadHint").textContent = loadedOnChain ? "Loaded on chain ✓" :
-    (Object.keys(localChips).length===6 ? "Ready — one transaction, "+localTotal()+" TIMBS" :
-     "Choose a chip for every token ("+Object.keys(localChips).length+"/6)");
+    (p.key!=="entry"
+      ? "Entry closed — this seat can no longer load, so it sits the round out. Nothing is at risk: you never sent chips."
+      : Object.keys(localChips).length===6 ? "Ready — one transaction, "+localTotal()+" TIMBS" :
+        "Choose a chip for every token ("+Object.keys(localChips).length+"/6)");
   updateTotals();
 }
 function localTotal(){ return Object.values(localChips).reduce((a,i)=>a+CHIPS[i],0); }
