@@ -25,11 +25,12 @@ a full table.
 ## Flow of funds (target state)
 
 ```
-stakes ──┬─ winners ──────────────── push-paid at each lock (unchanged)
-         ├─ rake (contested only) ── Treasury                (unchanged)
-         ├─ SOLO pool forfeits ───── UnderwriteReserve       (funds fair odds on thin tables)
-         └─ CONTESTED no-winner ──┬─ half → la partage credit (back to that pool's bettors)
-            pots                  └─ half → Rolling Jackpot
+stakes ──┬─ winners ─────────────── push-paid at each lock (+ reserve top-up, M1)
+         ├─ rake (contested only) ─┬─ half → UnderwriteReserve   (activity-matched income)
+         │                         └─ half → Treasury
+         └─ ALL dead pots ───────── WATERFALL:
+                                      reserve, until it holds FLOAT_TARGET
+                                      overflow → half la partage · half Rolling Jackpot
 seed ────── per table from funder ── unchanged (§9 guards intact)
 Treasury ─┬─ seeds + backstops the UnderwriteReserve   (operator-approved, budgeted)
           └─ optional jackpot bonus drops for events   (operator-approved, budgeted)
@@ -45,11 +46,28 @@ bind sooner (payouts floor at par and pool money); in busy periods the rake
 funds the wiggle room. Track it as two running counters on the reserve
 contract so the invariant is checkable on-chain, not just policy.
 
-Why the split is shaped this way (sim-verified): la partage on *solo* pools
-would bleed the reserve dry (net −0.39 per staked TIMBS on a long shot) —
-solo forfeits are precisely the income that pays for solo underwrites, so they
-stay whole. Contested no-winner pots are house windfalls with no reserve
-liability attached, so they can afford generosity.
+Why this shape — the two-regime stress test (sim-verified). A first draft
+routed only solo forfeits to the reserve and gave contested dead pots straight
+to la partage + jackpot. Stress-tested against the two regimes the table
+actually produces, it **bled in both**:
+
+| Regime | first draft | waterfall + rake share |
+|---|---|---|
+| winner-heavy (crowds on short odds, correlated wins) | −25 / round | **+21 / round** |
+| loser-heavy (spread long shots, frequent forfeits) | −16 / round | **+12 / round** |
+
+The monotonic top-up (M1) creates liability precisely in *winner-heavy, busy*
+rounds — which produce no forfeits. The only income that scales with the same
+activity is **rake**, so the reserve takes a rake share; and the reserve gets
+**first call on every dead pot** until it holds a float, because solvency
+comes before sizzle. Winner-heavy rounds are now the reserve's *best* regime:
+the crowd that creates the top-ups pays the rake that funds them.
+
+How each world feels: in a cold streak, forfeits fill the reserve and the
+overflow visibly builds the jackpot — losing rounds literally grow the pot
+everyone is chasing, and la partage slows the bleed. In a hot streak, payouts
+flow, the rake share quietly self-insures them, and the jackpot grows slower —
+which nobody minds, because they are winning.
 
 ## The mechanisms, ranked by leverage
 
@@ -114,7 +132,7 @@ Every subsidy traced against a lone-wallet attacker:
 |---|---|---|
 | Underwrite | solo-farm long shots | RTP < 1 (0.90) — grinding it loses 10% forever; caps bound variance |
 | Jackpot slice | lone wallet grinds DD on empty tables | pays only with ≥2 distinct DD wallets; metered slice |
-| La partage | bet into empty pools for half-back | contested pools only; solo forfeits keep funding the reserve |
+| La partage | bet into empty pools for half-back | contested pools only, and only from waterfall overflow — an empty reserve pays no half-backs |
 | Encore carry | "bet 5 to drain the carry" | gen-4 plan's min-chip scaling + metered reserve, unchanged |
 
 The recurring pattern is §9's: **no subsidy flows to a pool with fewer than
@@ -131,7 +149,11 @@ two distinct wallets.** One rule, four mechanisms.
 
 ## Open questions
 
-1. Jackpot slice percentage and floor (20% / 50 TIMBS are placeholders).
+1. Jackpot slice percentage and floor (20% / 50 TIMBS are placeholders), and
+   `FLOAT_TARGET` for the reserve waterfall (should cover several rounds of
+   worst-case round caps — e.g. 3 × MAX_ROUND_UNDERWRITE = 4,500).
+1b. Rake share (50/50 reserve/Treasury is the sim-tested placeholder — Treasury
+   keeps half of a busier game rather than all of a subsidised one).
 2. Does la partage credit auto-stake into the encore round (stickier, but more
    contract surface) or sit as withdrawable credit (simpler, chosen for now)?
 3. ~~Should the jackpot accept outside top-ups?~~ **Answered: yes, budgeted.**

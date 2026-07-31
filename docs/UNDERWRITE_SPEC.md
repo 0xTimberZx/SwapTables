@@ -99,15 +99,19 @@ no spot is a better or worse deal than another:
 
 Solo *Exactly A* on a 25 chip goes from **23** to **810**.
 
-### Layer 2 — fund the reserve from forfeits
+### Layer 2 — fund the reserve from dead pots AND a rake share
 
-Pools that settle with no winner currently sweep to Treasury. Route them to an
-`UnderwriteReserve` instead and the backstop is **self-funding**: money lost by
-losers pays the long shots of winners, which is what a pool would have done if
-the table were busy.
+Two income streams, because the liabilities come in two regimes
+(see `GAME_ECONOMY.md`, two-regime stress test):
 
-At a 90% target, forfeits run ≈10% of turnover long-run, so the reserve accretes
-in expectation. Seed it once from Treasury to cover early variance.
+- **Every dead pot** (solo or contested, no winner) flows to the reserve first,
+  until it holds a float target; overflow feeds the jackpot and la partage.
+- **Half the rake** routes to the reserve. Top-up liability peaks in busy,
+  winner-heavy rounds — which produce no forfeits but plenty of rake. Matching
+  income to liability by activity is what makes both regimes solvent
+  (winner-heavy: +21/round; loser-heavy: +12/round, simulated).
+
+Seed it once from Treasury (budgeted, see below) to cover early variance.
 
 ## The caps are the whole design
 
