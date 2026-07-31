@@ -108,9 +108,36 @@ Underwriting at fair odds is roughly **EV-neutral before rake** — the risk is
 
 ```
 MAX_UNDERWRITE_PAYOUT   1000 TIMBS   // per winning pool
+MAX_ROUND_UNDERWRITE    1500 TIMBS   // per table per round, first-settled-first-served
 MAX_RESERVE_FRACTION    10%          // of reserve, per pool
-PAYOUT_RATIO            90%          // house edge
+PAYOUT_RATIO            90%          // house edge — uniform across every bet type
 ```
+
+`MAX_ROUND_UNDERWRITE` bounds the seven-pot worst case: one wallet solo on all
+seven pots at 25-chip stakes would otherwise draw ~5,670 in a single swept
+round. With the round cap, a table can never extract more than 1,500 from the
+reserve regardless of how many pots hit.
+
+### Decision record — cap TIMBS, never the multiple
+
+Two alternatives were considered and rejected (2026-07-31):
+
+- **(a) lower the max multiple 35 → 25.** Clips exactly one bet: *Exactly*
+  falls to RTP 0.72 while every other spot keeps ~1.0 — the marquee bet becomes
+  the worst deal on the board. Breaks the uniformity that makes the felt fair.
+- **(b) cap the multiple at 5× (one-seventh of the table's pots).** *Exactly*
+  falls to RTP 0.17 and dies. The seven-pot intuition is real but it is a
+  *round-exposure* concern, not a per-pot pricing concern — a player's seven
+  pots are seven separate stakes, not one bankroll split seven ways.
+
+Both also fail in contested pools, where the multiple is a **relative weight**,
+not a payout: two winners splitting a pot receive the same total at weight 35,
+25 or 5 — capping it there changes nothing about exposure and only shifts money
+from long-shot winners to short-odds winners.
+
+Rule of thumb this design keeps: **odds stay honest at every stake; exposure is
+bounded in TIMBS.** A small chip earns its true multiple; a whale's payout is
+clipped by the caps; and no bet type is ever quietly priced worse than another.
 
 | chip on *Exactly* | target | after caps |
 |---|---|---|
