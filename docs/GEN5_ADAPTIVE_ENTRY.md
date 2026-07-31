@@ -187,6 +187,15 @@ goes near a stream: the monotonicity of `entryCloseAt`, each of the three close
 triggers, late-load-then-place inside the window, late-load rejected after
 bets close, and arm refusing a table of unfunded seats.
 
+## Related — uncontested pools
+
+A fourth change is specced separately in
+[`UNDERWRITE_SPEC.md`](UNDERWRITE_SPEC.md): a solo winner currently receives
+0.92x their own stake, so winning loses money. Its **Layer 0** (do not rake an
+uncontested pool) is one line, needs no reserve and no new money, and is the
+natural rider on this generation. Layers 1-2 route TIMBS from a reserve and are
+an accounting change that deserves its own generation.
+
 ## Open questions
 
 1. **Does `SOLO_WAIT` open a table that cannot arm?** A lone funded player hits
