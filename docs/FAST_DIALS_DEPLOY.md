@@ -122,6 +122,26 @@ scoped by board address, so the new generation starts with a clean broadcast
 slate, and the director/console pick up the new board on deploy of the app
 update. Old gen-3 rows just go quiet.
 
+## Step 6 — retire the old generation (done 2026-07-31)
+
+A superseded board is only truly retired once it can no longer pull money or
+consume seeds. Order matters: **de-whitelist last**, after the old ledger has
+paid out everyone, or a large withdrawal can trip `maxTransferAmount`.
+
+1. From the **seed funder**: `TIMBS.approve(<old PoolLedger>, 0)` — the real
+   delist. Without it anyone can still call `openTable` on the old board and
+   pull `TABLE_SEED` per table out of the funder.
+2. From the **registry owner**: `SeedRegistry.removeWriter(<old SegmentBoard>)`
+   on `0x2460C8ed…Fcb914` — the old board can no longer consume seed rounds.
+3. From the **guardian**: `SegmentBoard.setNewTablesHalted(true)` on the old
+   board — third lock on the same door, free to add.
+4. **Only after every credit is withdrawn** (`heldBalance == 0`):
+   `TIMBS.setTransferWhitelist(<old PoolLedger>, false)`.
+
+Done for gen-3 (`0x1633Fb…c62257` / `0x5ee3d08F…105C`) once its vault read
+`0 / 0 / 0`. The entropy module needs nothing — it is stateless and only the
+board it was deployed with ever called it.
+
 ## Step 5 — smoke test before streaming
 
 One full round with two wallets: open → both sit + load (watch entry close at
