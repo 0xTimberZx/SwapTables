@@ -124,6 +124,16 @@ history of winning strings. Streaks, biggest single hit, jackpot honour roll
 on the stream page. Costs nothing, farms nothing, and gives the stream a
 protagonist ("♠·9dE is up 400 this week").
 
+### M6 — Tip the dealer (gen-6, `GEN6_DEALER_TIP.md`)
+
+The wallet that opens a table is the dealer — it commits the secrets and runs
+the reveals. After the sixth lock (never before: a sealed outcome is what
+makes a tip gratitude rather than a bribe), any seated wallet can move part of
+its credit to the opener with one click. Zero rake, credit-to-credit only, no
+subsidy involved so §9 has nothing to guard. Pays the person doing the work of
+hosting rounds, gives the drumroll an outro beat, and feeds M5 ("top-tipped
+dealer this week").
+
 ## Farm-resistance checklist
 
 Every subsidy traced against a lone-wallet attacker:
@@ -142,7 +152,8 @@ two distinct wallets.** One rule, four mechanisms.
 
 1. **gen-5** (timing): adaptive entry, late loading, arm-on-funded — plus
    underwrite **Layer 0** (never rake an uncontested pool; one line).
-2. **gen-6** (accounting): monotonic underwrite (M1) + reserve. The jackpot
+2. **gen-6** (accounting): monotonic underwrite (M1) + reserve, dealer tips
+   (M6 — one appended table field + one ledger `moveCredit`). The jackpot
    contract (M2) can deploy alongside — it is additive and cross-generation.
 3. **M3/M4** ride the gen-6 settle path once it exists; **M5** is app-only and
    can ship any time.
