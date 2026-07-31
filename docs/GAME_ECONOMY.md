@@ -1,0 +1,131 @@
+# SwapTables game economy — feeding the pot, feeding the drive
+
+Draft, 2026-07-31. Design doc, nothing built. Companion to
+`UNDERWRITE_SPEC.md` (thin-pool fairness) and `GEN4_DEPLOY.md` (encore rounds).
+All claims below were checked in simulation; the sims live with the session
+notes, the conclusions live here.
+
+## The one law
+
+**More players at the table must never make any player's outcome worse.**
+
+Every mechanism below was tested against this monotonicity law. The original
+underwrite draft failed it — a solo bettor's underwritten 810 collapsed to 61
+the moment one opponent joined and lost — which would teach players to want
+empty pools. Fixed by making the reserve top up *thin contested* pools to the
+same target: pool money pays first, the reserve covers the shortfall, caps
+apply to the reserve's contribution only. A joiner can now only raise you.
+
+This law is also the house's alignment story: rake is graduated (8% solo → 
+1.75% crowded — and 0% uncontested per Layer 0), so **the house earns most when
+tables are busy, players win most when tables are busy, and the jackpot grows
+fastest when tables are busy.** Everyone in the system wants the same thing:
+a full table.
+
+## Flow of funds (target state)
+
+```
+stakes ──┬─ winners ──────────────── push-paid at each lock (unchanged)
+         ├─ rake (contested only) ── Treasury                (unchanged)
+         ├─ SOLO pool forfeits ───── UnderwriteReserve       (funds fair odds on thin tables)
+         └─ CONTESTED no-winner ──┬─ half → la partage credit (back to that pool's bettors)
+            pots                  └─ half → Rolling Jackpot
+seed ────── per table from funder ── unchanged (§9 guards intact)
+Treasury ─┬─ seeds + backstops the UnderwriteReserve   (operator-approved)
+          └─ optional jackpot bonus drops for events   (operator-approved)
+```
+
+Why the split is shaped this way (sim-verified): la partage on *solo* pools
+would bleed the reserve dry (net −0.39 per staked TIMBS on a long shot) —
+solo forfeits are precisely the income that pays for solo underwrites, so they
+stay whole. Contested no-winner pots are house windfalls with no reserve
+liability attached, so they can afford generosity.
+
+## The mechanisms, ranked by leverage
+
+### M1 — Monotonic underwrite (gen-6, accounting change)
+
+`UNDERWRITE_SPEC.md`, amended per the audit: applies to solo **and** thin
+contested pools as a shortfall top-up toward `stake × fair × 0.90`, capped per
+pool / per round / never above what makes a crowd worse. What it buys:
+long-shot bets are real at every table size, and nobody ever wins less than
+they staked. What it costs: bounded reserve variance, self-funded at ~10% of
+solo turnover.
+
+### M2 — Rolling Double-Digit jackpot (the "play and play" engine)
+
+Double-Digit is already the game's rarest, most legible event (~38% of rounds
+even *can* pay it). Make it progressive:
+
+- Unclaimed DD pots and half of contested no-winner pots roll into a
+  **jackpot pool that persists across tables** (same cross-generation shape as
+  SeedRegistry — deploy once, never redeploy).
+- Each table's DD pool draws a **metered slice** of the jackpot (e.g. 20%,
+  min 50 TIMBS), not the whole thing — the gen-4 encore plan's anti-drain
+  reserve logic, reused verbatim.
+- **Jackpot slice pays only if ≥2 distinct wallets bet DD** (§9 guard again),
+  so it cannot be farmed by a lone wallet grinding empty tables.
+
+This is the classic variable-ratio hook done honestly: the number on the
+banner only ever climbs until somebody takes it, everyone at the table can see
+it, and the last lock of every round is a jackpot moment. The stream banner
+gets `JACKPOT 1,240 TIMBS` next to the pot, and the drumroll's sixth reveal
+becomes appointment television.
+
+### M3 — La partage on contested dead pools (bankroll preservation)
+
+Roulette's half-back rule, transplanted: when a **contested** pool settles
+with no winner, half the pot returns to its bettors pro-rata as credit, half
+feeds the jackpot. Session length is bankroll length — players who lose
+*slower* play *longer*, and the half that leaves them funds the thing that
+brings them back. Explicitly **not** applied to solo pools (breaks the
+reserve; a lone farmer would be subsidised for betting into nothing).
+
+### M4 — Encore tables (already designed, now load-bearing)
+
+`GEN4_DEPLOY.md`'s encore rounds: a table that retires holding a surplus
+re-offers itself instead of dying. With M2 the encore banner is not just "the
+table is still open" but "**the pot is still on the table**" — the strongest
+possible come-back hook, and it needs no new design work beyond what the gen-4
+plan already holds (metered reserve, minimum-chip scaling).
+
+### M5 — Status layer (free retention, no token flow)
+
+The 7-day wallet performance card already on the roadmap, plus a per-table
+history of winning strings. Streaks, biggest single hit, jackpot honour roll
+on the stream page. Costs nothing, farms nothing, and gives the stream a
+protagonist ("♠·9dE is up 400 this week").
+
+## Farm-resistance checklist
+
+Every subsidy traced against a lone-wallet attacker:
+
+| Flow | Attack | Guard |
+|---|---|---|
+| Underwrite | solo-farm long shots | RTP < 1 (0.90) — grinding it loses 10% forever; caps bound variance |
+| Jackpot slice | lone wallet grinds DD on empty tables | pays only with ≥2 distinct DD wallets; metered slice |
+| La partage | bet into empty pools for half-back | contested pools only; solo forfeits keep funding the reserve |
+| Encore carry | "bet 5 to drain the carry" | gen-4 plan's min-chip scaling + metered reserve, unchanged |
+
+The recurring pattern is §9's: **no subsidy flows to a pool with fewer than
+two distinct wallets.** One rule, four mechanisms.
+
+## Sequencing
+
+1. **gen-5** (timing): adaptive entry, late loading, arm-on-funded — plus
+   underwrite **Layer 0** (never rake an uncontested pool; one line).
+2. **gen-6** (accounting): monotonic underwrite (M1) + reserve. The jackpot
+   contract (M2) can deploy alongside — it is additive and cross-generation.
+3. **M3/M4** ride the gen-6 settle path once it exists; **M5** is app-only and
+   can ship any time.
+
+## Open questions
+
+1. Jackpot slice percentage and floor (20% / 50 TIMBS are placeholders).
+2. Does la partage credit auto-stake into the encore round (stickier, but more
+   contract surface) or sit as withdrawable credit (simpler, chosen for now)?
+3. ~~Should the jackpot accept outside top-ups?~~ **Answered: yes.** The
+   operator has approved routing TIMBS from Treasury into both the reserve and
+   the jackpot. Bonus drops become a stream-event tool ("tonight's jackpot is
+   boosted"). The jackpot still needs a guardian + halt, since it now custodies
+   meaningful TIMBS.

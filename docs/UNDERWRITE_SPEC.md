@@ -65,16 +65,25 @@ exists to price a *contest*, and there is no contest.
 
 Expected value is still poor (par × p(win)); Layer 1 is what makes the bet real.
 
-### Layer 1 — underwrite a solo winner to a target RTP
+### Layer 1 — top every thin winner up to a target RTP
 
-Pay a solo winner from a reserve at a fixed fraction of true odds. Because the
-contract's weight is `36/symbols − 1`, total fair return is `36/symbols`:
+**Audit finding (2026-07-31):** the first draft underwrote *solo* pools only.
+Simulated, that fails monotonicity — a solo bettor's 810 collapsed to 61 the
+moment one opponent joined and lost, so joining a pool would *hurt* the player
+already in it. The fix is a **shortfall top-up**: the pool pays first, and the
+reserve tops any winner up to the same target. A joiner can only raise you.
 
 ```
-target = stake * (36 / symbols) * PAYOUT_RATIO        // PAYOUT_RATIO = 0.90
-pay    = max( min(target, MAX_UNDERWRITE_PAYOUT, reserve * MAX_RESERVE_FRACTION),
-              stake )                                  // never below par
+target   = stake * (36 / symbols) * PAYOUT_RATIO      // PAYOUT_RATIO = 0.90
+poolPay  = winner's pari-mutuel share (unchanged math)
+topUp    = min( target - poolPay,
+                MAX_UNDERWRITE_PAYOUT, reserve * MAX_RESERVE_FRACTION )
+pay      = max( poolPay + max(topUp, 0), stake )       // never below par
 ```
+
+Once `poolPay` alone clears the target (a genuinely busy pool), the reserve
+contributes nothing — the mechanism fades out exactly where pari-mutuel starts
+working on its own.
 
 `PAYOUT_RATIO` applies uniformly, so **every bet type returns the same 90%** —
 no spot is a better or worse deal than another:
@@ -159,17 +168,16 @@ If underwriting were generous, a solo pool would become *safer* than a contested
 one: guaranteed 90% RTP without sharing. That inverts the social pull the whole
 game rests on.
 
-The caps must keep a well-contested pool the better outcome for meaningful
-stakes. Worked example, 25 on *Exactly A*:
+With the top-up, the worked example (25 on *Exactly A*) is monotonic:
 
-- solo, underwritten → **810** (capped, fixed)
-- contested with one 25 opponent → pot 64.29, rake 4.87% → **61** *(worse)*
-- contested where others pile into losing spots → scales with the pot, unbounded
-  by the reserve caps *(better, and better the busier the table)*
+- solo → pool pays 25, reserve tops up to **810**
+- one opponent joins and loses → pool pays 61, reserve tops up to **810** (same)
+- table fills, pot swells past the target → pool pays it all, reserve pays
+  **nothing**, and the payout scales unbounded with the crowd
 
-So small solo bets are made *fair*, while the upside still lives in a crowded
-table. **This ordering is the acceptance criterion** — if a chosen parameter set
-makes solo dominate contested at any common stake, the parameters are wrong.
+**The acceptance criterion is monotonicity:** for every stake and bet type,
+another player joining the table must never reduce any existing player's
+payout. Any parameter set that violates it is wrong.
 
 ## Accounting and safety
 
@@ -186,15 +194,14 @@ Money now enters a pool from **outside** at settle time, which is new. The
 - Reserve is its own contract with a **halt** and no owner withdrawal path
   beyond a guardian drain to Treasury; it holds player-facing money.
 
-## Generalisation (later, not now)
+## Treasury backstop (operator-approved)
 
-The same shortfall logic could top up *thin but contested* pools — a 25 winner
-against one opponent takes 61 where fair is 900. Formulating as
-`pay = min(fairPay, poolPay + underwrite)` covers both cases in one rule.
-
-Deliberately out of scope for a first build: it makes exposure depend on pool
-composition rather than a simple `n == 1` test, and the solo case is the one
-that produces the "I won and lost money" sentence.
+The reserve is **seeded and backstopped by Treasury** — the operator has
+explicitly approved parking TIMBS outside Treasury and pulling from it when
+the reserve runs thin. Forfeit routing keeps it self-funding in expectation
+(~10% of solo turnover accretes, sim-checked over 200k rounds with negligible
+drawdown); Treasury absorbs early variance and any cap-shortfall events, via
+the same approve/transferFrom pattern as the table seed.
 
 ## App impact
 
