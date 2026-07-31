@@ -6,17 +6,22 @@ export const ADDRESSES = {
   arbitrumSepolia: {
     chainId: 421614,
 
-    // ── SwapTables board, generation 4 — fast dials (live) ─────────────────
+    // ── SwapTables board, generation 5 — adaptive entry (live) ─────────────
     //
-    // STREAM DIALS: entry closes 15:00, bets close 20:00, pick 25:00
-    // (900 / 1500 / 300). A full round is ~25 min + the staggered reveals.
-    // Same code as gen-3 (per-table escrow, cancel returns seed to funder);
-    // only the three timing dials changed. Deployed 2026-07-30, see
-    // SwapTables/docs/FAST_DIALS_DEPLOY.md for the run.
-    SegmentBoard: "0x57d5BE0203Fa30f7b99853a11e4D162824895F91", // state machine + pari-mutuel settlement
-    PoolLedger:   "0x863e37FF91cbd745CBcb063266Bf0631Ce2546b5", // custodies chips PER TABLE; credits + pays winners
+    // The schedule follows the players (docs/GEN5_ADAPTIVE_ENTRY.md):
+    // entry closes at the EARLIEST of quiet quorum (last join + 3m, once 2+
+    // wallets are funded), lone-player wait (first load + 15m), or the 40m
+    // ceiling — every sit or load pushes the quiet clock out again. Then
+    // board open 5m, committed drumroll 2m (dials 2400/300/120/180/900).
+    // Also: late loading (seated wallets fund until bets close), armTable
+    // requires two FUNDED wallets, and Layer 0 — an uncontested pool is
+    // never raked, so a solo winner takes par. entryCloseAt/pickTime are
+    // per-table state now; the apps feature-detect the generation on connect.
+    // Deployed 2026-07-31.
+    SegmentBoard: "0x7358Aa710F65B4228A7C0A56bedeD20Fd537B2ff", // state machine + pari-mutuel settlement
+    PoolLedger:   "0x020E3A7Fde41fa4bA18a978f10DE5484594C43a0", // custodies chips PER TABLE; credits + pays winners
     SeedRegistry: "0x2460C8ed63414F36838542982A5Ab263C9Fcb914", // long-lived ACROSS generations — never redeploy
-    CommitRevealEntropy: "0xe926797b2FC03E2936092D3de2B4c7ADE2e4A5Fd", // swappable for VRF later
+    CommitRevealEntropy: "0xb2a46fB96A8894a50341d5F162C130966ca4f895", // swappable for VRF later
     SegmentCrank: "0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D", // stateless lock/retire batcher — permissionless, generation-AGNOSTIC: survives redeploys
 
     // ── TimbSwap protocol ──────────────────────────────────────────────────
@@ -48,6 +53,15 @@ export const ADDRESSES = {
 // ── Retired — do not wire anything to these ────────────────────────────────
 export const RETIRED = {
   arbitrumSepolia: {
+    // gen 4: nothing broken — superseded 2026-07-31 by gen-5's adaptive
+    // entry. Fixed fast dials (900/1500/300) still made every table wait
+    // the full window; gen-5 lets the schedule follow the players. Vault
+    // drained to 0/0/0 before the switch; escrow accounting sound.
+    gen4: {
+      SegmentBoard: "0x57d5BE0203Fa30f7b99853a11e4D162824895F91",
+      PoolLedger:   "0x863e37FF91cbd745CBcb063266Bf0631Ce2546b5",
+      CommitRevealEntropy: "0xe926797b2FC03E2936092D3de2B4c7ADE2e4A5Fd",
+    },
     // gen 3: nothing broken — superseded 2026-07-30 for dial speed only
     // (40-min entry read as dead air on stream). Escrow accounting sound;
     // ledger still pays withdrawals of remaining credits forever.
