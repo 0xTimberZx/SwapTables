@@ -193,6 +193,14 @@
     border:1px solid var(--gold);border-radius:10px;padding:13px 16px;
     background:linear-gradient(180deg,rgba(215,179,76,.14),rgba(0,0,0,.14))}
   .approve.on{display:flex}
+  /* Phones / short landscape: the felt is taller than the viewport, so an
+     in-flow confirm lands off-screen the moment you tap a spot. Pin it. */
+  @media (max-width:1024px), (orientation:landscape) and (max-height:600px){
+    .approve.on{position:fixed;left:8px;right:8px;bottom:8px;z-index:95;margin:0;
+      background:rgba(9,20,14,.97);box-shadow:0 -8px 28px rgba(0,0,0,.65)}
+    .approve .msg{flex:1 1 100%;font-size:13px}
+    .approve .act{margin-left:0;width:100%;justify-content:flex-end}
+  }
   .approve .msg{font-size:13.5px;line-height:1.5;color:#f0e7c9;font-family:Georgia,serif}
   .approve .msg b{color:var(--gold)}
   .approve .msg .warn{color:var(--err);font-style:italic;font-family:"Arial Narrow",Arial,sans-serif}
@@ -1108,6 +1116,8 @@ function stage(p){
       +'<span class="warn">Approving sends the transaction — once mined, it\'s final.</span>';
   }
   approveBar.classList.add("on");
+  // on wider screens the bar sits in flow — make sure it is actually in view
+  try{ approveBar.scrollIntoView({block:"nearest",behavior:"smooth"}); }catch{}
   rail("Awaiting your approval — <b>"+spec.name+"</b>. Approve to send, or choose another spot.");
 }
 function paintApproveMsg(){
