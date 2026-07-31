@@ -1,9 +1,12 @@
 # Generation 5 — adaptive entry + late loading
 
-Draft, 2026-07-31. **Status: IMPLEMENTED 2026-07-31** — contract + tests on
-TimbSwap branch `claude/company-emblem-card-6xcyz2` (commit `3524b70`); all
-entry files compile clean on solc 0.8.24; `forge test` run pending (no forge in
-the build sandbox). Not yet deployed — gen-4 remains the live board. Written
+Draft, 2026-07-31. **Status: IMPLEMENTED + TESTED 2026-07-31** — contract +
+tests on TimbSwap branch `claude/company-emblem-card-6xcyz2` (commits `3524b70`
++ `bb0084b`); full forge suite green, 125/125 (13 gen-5 behaviour tests, legacy
+suites adapted with ceiling-pinned timers). The apps are already
+generation-aware (SwapTables commit `76c1542`) — they feature-detect the board
+and need no further change at deploy. Not yet deployed — gen-4 remains the
+live board. Written
 from two live stream sessions (Twitch, Kick) and the gen-4 smoke test, where
 the failure mode was never the maths — it was people sitting around waiting for
 clocks.
