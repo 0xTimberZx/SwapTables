@@ -1,8 +1,12 @@
 # Generation 5 — adaptive entry + late loading
 
-Draft, 2026-07-31. **Spec for review; nothing built.** Written from two live
-stream sessions (Twitch, Kick) and the gen-4 smoke test, where the failure mode
-was never the maths — it was people sitting around waiting for clocks.
+Draft, 2026-07-31. **Status: IMPLEMENTED 2026-07-31** — contract + tests on
+TimbSwap branch `claude/company-emblem-card-6xcyz2` (commit `3524b70`); all
+entry files compile clean on solc 0.8.24; `forge test` run pending (no forge in
+the build sandbox). Not yet deployed — gen-4 remains the live board. Written
+from two live stream sessions (Twitch, Kick) and the gen-4 smoke test, where
+the failure mode was never the maths — it was people sitting around waiting for
+clocks.
 
 Gen-4 cut a round from ~60 to ~25 minutes by changing three constructor dials.
 That was the interim fix and it worked, but it is still a *fixed* schedule: a
@@ -44,6 +48,14 @@ Entry closes at the **earliest** of:
 **Every new sit pushes the quiet timer out again** — a table that keeps
 attracting players keeps its doors open. This is the operator's ask verbatim:
 *"every new sit pushes that timer to 5 mins so they can be swiftly acquainted."*
+
+**Implementation refinement:** the quiet clock resets on any *join* — a `sit`
+**or** a `loadTokens` — not sits alone (the field is `lastJoinAt`, not
+`lastSitAt`). Otherwise the load that *forms* quorum could retroactively slam
+the door: wallet B sat four minutes ago, funds now, `lastSitAt + SIT_QUIET`
+is already in the past, entry snaps shut the same second the table became
+playable. Counting the funding transaction as the join keeps the promise that
+the door stays open five quiet minutes after the last arrival.
 
 Once entry closes, the rest of the schedule is derived from that moment:
 
@@ -198,12 +210,12 @@ an accounting change that deserves its own generation.
 
 ## Open questions
 
-1. **Does `SOLO_WAIT` open a table that cannot arm?** A lone funded player hits
-   entry close, places bets, and then arm reverts on `loadedCount < 2`. The
-   table is stuck until cancel. Options: refuse to close entry below quorum and
-   let `ENTRY_MAX` handle it, or auto-cancel at pick time. Leaning toward the
-   latter — the operator board can surface *"cancel: never filled"* as it does
-   now, and auto-pilot could fire it.
+1. ~~**Does `SOLO_WAIT` open a table that cannot arm?**~~ **Answered in the
+   implementation:** `armTable` refuses (`loadedCount < 2`) and `cancelTable`
+   accepts as soon as entry has closed with the table below quorum — no waiting
+   for `ENTRY_MAX`, no stuck state. Sits and loads refund through the existing
+   cancel path; the operator board surfaces *"cancel: never filled"* and
+   auto-pilot can fire it.
 2. **Should a sit after quorum extend the timer indefinitely?** Currently capped
    only by `ENTRY_MAX`. A steady trickle of sits could hold a table open for the
    full 40 minutes — which is arguably correct (people are joining), but on
