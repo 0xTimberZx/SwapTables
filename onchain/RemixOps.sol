@@ -9,11 +9,15 @@ pragma solidity ^0.8.20;
 // 0.8.20+, then in Deploy & Run pick an interface and use "At Address" with
 // the deployed address. Full builds and tests live in the Foundry repo.
 //
-// Gen-5 (Arbitrum Sepolia, deployed 2026-07-31):
+// Gen-6 (Arbitrum Sepolia, deployed 2026-07-31 — LIVE):
+//   SegmentBoard       0x1de9889da2083F5f1693DfCf589A453E9b39EEA7
+//   PoolLedger         0x819B5074312E4ADD9D72D722D9C6a38320796Bd8
+//   UnderwriteReserve  0xa0f88d8504D340702889C48288D8FB9329D88184
+//   SeedRegistry       0x2460C8ed63414F36838542982A5Ab263C9Fcb914  (shared, all gens)
+//   SegmentCrank       0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D  (shared, all gens)
+// Gen-5 (retired 2026-07-31; ledger still pays withdrawals):
 //   SegmentBoard  0x7358Aa710F65B4228A7C0A56bedeD20Fd537B2ff
 //   PoolLedger    0x020E3A7Fde41fa4bA18a978f10DE5484594C43a0
-//   SeedRegistry  0x2460C8ed63414F36838542982A5Ab263C9Fcb914  (shared, all gens)
-//   SegmentCrank  0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D  (shared, all gens)
 
 interface ISegmentBoardOps {
     // ── lifecycle ──
@@ -59,6 +63,22 @@ interface IPoolLedgerOps {
     function credit(address wallet) external view returns (uint256);
     function tableEscrow(uint256 tableId) external view returns (uint256);
     function withdraw() external;
+}
+
+/// @dev Gen-6 underwrite reserve — guardian halt/drain, budgeted support,
+///      and the counters that keep the no-minting rule checkable.
+interface IUnderwriteReserveOps {
+    function setHalted(bool halted) external;
+    function drainToTreasury() external;
+    function fundBudgeted(uint256 amount) external;
+    function setFloatTarget(uint256 target) external;
+    function freeFloat() external view returns (uint256);
+    function overflowEarmark() external view returns (uint256);
+    function gameIncome() external view returns (uint256);
+    function treasuryEarned() external view returns (uint256);
+    function treasurySupport() external view returns (uint256);
+    function roundUsed(uint256 tableId) external view returns (uint256);
+    function halted() external view returns (bool);
 }
 
 interface ISeedRegistryOps {

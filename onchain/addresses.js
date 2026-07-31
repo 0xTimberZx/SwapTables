@@ -6,22 +6,28 @@ export const ADDRESSES = {
   arbitrumSepolia: {
     chainId: 421614,
 
-    // ── SwapTables board, generation 5 — adaptive entry (live) ─────────────
+    // ── SwapTables board, generation 6 — the accounting generation (live) ──
     //
-    // The schedule follows the players (docs/GEN5_ADAPTIVE_ENTRY.md):
-    // entry closes at the EARLIEST of quiet quorum (last join + 3m, once 2+
-    // wallets are funded), lone-player wait (first load + 15m), or the 40m
-    // ceiling — every sit or load pushes the quiet clock out again. Then
-    // board open 5m, committed drumroll 2m (dials 2400/300/120/180/900).
-    // Also: late loading (seated wallets fund until bets close), armTable
-    // requires two FUNDED wallets, and Layer 0 — an uncontested pool is
-    // never raked, so a solo winner takes par. entryCloseAt/pickTime are
-    // per-table state now; the apps feature-detect the generation on connect.
+    // Gen-5's adaptive timing unchanged (dials 2400/300/120/180/900), plus
+    // the money mechanics (docs/UNDERWRITE_SPEC.md, GEN6_DEALER_TIP.md,
+    // GAME_ECONOMY.md):
+    //   - monotonic underwrite (M1): thin winners topped up toward
+    //     stake x fair x 0.90 from the UnderwriteReserve; pool pays first,
+    //     reserve covers the shortfall — a joiner can only raise you. Caps:
+    //     1000/pool, 1500/round, 10% of free float. DD is not underwritten.
+    //   - flow of funds: every dead pot + half the rake -> reserve at
+    //     retire (waterfall parks overflow for the jackpot/la partage);
+    //     other half + unconsumed seed -> Treasury. Solvency counters on
+    //     the reserve keep Treasury support <= what the game earned.
+    //   - dealer tips (M6): seated wallets tip the opener after the sixth
+    //     lock, credit-to-credit, zero rake.
+    // tables() appends `opener`; the apps feature-detect gen on connect.
     // Deployed 2026-07-31.
-    SegmentBoard: "0x7358Aa710F65B4228A7C0A56bedeD20Fd537B2ff", // state machine + pari-mutuel settlement
-    PoolLedger:   "0x020E3A7Fde41fa4bA18a978f10DE5484594C43a0", // custodies chips PER TABLE; credits + pays winners
+    SegmentBoard: "0x1de9889da2083F5f1693DfCf589A453E9b39EEA7", // state machine + pari-mutuel settlement + tips
+    PoolLedger:   "0x819B5074312E4ADD9D72D722D9C6a38320796Bd8", // custodies chips PER TABLE; credits + pays winners
+    UnderwriteReserve: "0xa0f88d8504D340702889C48288D8FB9329D88184", // the top-up float; income = dead pots + half rake
     SeedRegistry: "0x2460C8ed63414F36838542982A5Ab263C9Fcb914", // long-lived ACROSS generations — never redeploy
-    CommitRevealEntropy: "0xb2a46fB96A8894a50341d5F162C130966ca4f895", // swappable for VRF later
+    CommitRevealEntropy: "0x63614173003957A3AECb6bd22C8cC491f7279F3D", // swappable for VRF later
     SegmentCrank: "0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D", // stateless lock/retire batcher — permissionless, generation-AGNOSTIC: survives redeploys
 
     // ── TimbSwap protocol ──────────────────────────────────────────────────
@@ -53,6 +59,14 @@ export const ADDRESSES = {
 // ── Retired — do not wire anything to these ────────────────────────────────
 export const RETIRED = {
   arbitrumSepolia: {
+    // gen 5: nothing broken — superseded 2026-07-31 (same day) by gen-6's
+    // accounting mechanics; the adaptive timing it introduced carries
+    // forward unchanged. Ledger still pays withdrawals of remaining credits.
+    gen5: {
+      SegmentBoard: "0x7358Aa710F65B4228A7C0A56bedeD20Fd537B2ff",
+      PoolLedger:   "0x020E3A7Fde41fa4bA18a978f10DE5484594C43a0",
+      CommitRevealEntropy: "0xb2a46fB96A8894a50341d5F162C130966ca4f895",
+    },
     // gen 4: nothing broken — superseded 2026-07-31 by gen-5's adaptive
     // entry. Fixed fast dials (900/1500/300) still made every table wait
     // the full window; gen-5 lets the schedule follow the players. Vault
