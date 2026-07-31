@@ -74,13 +74,19 @@ worth having is rule 1, and that is about optics of the reveal, not money.
   Tables board; lifetime tips fold into the M5 status layer naturally
   ("top-tipped dealer this week").
 
-## Open questions
+## Decision record (operator, 2026-07-31)
 
-1. Should losers be able to tip with fresh TIMBS (approve + transfer) when
-   they hold no credit? Leaning **no** for v1 — credit-only keeps it one
-   click and one code path; a generous loser can tip next round.
-2. Preset suggestion on the felt: percentage of the tipper's payout (1%?) or
-   flat chips? Flat chips match the game's chip language.
-3. Does the opener's address show on stream as a tag (♠·9dE style) so tips
-   have a visible recipient? Probably yes — it also gives the dealer an
-   identity for M5.
+1. **Credit-only, no fresh-TIMBS path.** A wallet with no credit cannot tip
+   this round; a generous loser tips next round. One click, one code path.
+2. **Presets are percentages, paid in chips.** The felt offers **5%** and
+   **10%** of the tipper's payout for this table, converted to chip units of
+   minimum value 5 and **rounded down**:
+   `tip = floor(pct × payout / 5) × 5`. If that floors to zero (payout under
+   100 at 5%), the preset greys out — no dust tips. This is a **felt rule
+   only**: `tipDealer` itself accepts any amount up to the tipper's credit,
+   so the contract stays one line of policy-free accounting and the presets
+   can be retuned without a redeploy.
+3. **The dealer gets a tag.** The opener shows on stream with the same
+   suit-tag identity as players (♠·9dE style) — tips have a visible
+   recipient, the ticker line reads person-to-person, and the tag is the
+   dealer's identity for M5 ("top-tipped dealer this week").
