@@ -87,8 +87,9 @@ solo turnover.
 (owner-tunable, slice ≤ 50%), §9 two-wallet guard, permissionless strike
 fired by the auto-pilot after the sixth lock. Deploy pending.
 
-Double-Digit is already the game's rarest, most legible event (~38% of rounds
-even *can* pay it). Make it progressive:
+Double-Digit is already the game's rarest, most legible event (~36% of rounds
+even *can* pay it — 1 - (35·34·33·32·31)/36^5 = 0.356; the felt's old ~38%
+was wrong). Make it progressive:
 
 - Unclaimed DD pots and half of contested no-winner pots roll into a
   **jackpot pool that persists across tables** (same cross-generation shape as
