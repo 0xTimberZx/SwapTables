@@ -160,8 +160,14 @@ two distinct wallets.** One rule, four mechanisms.
 2. **gen-6** (accounting): monotonic underwrite (M1) + reserve, dealer tips
    (M6 — one appended table field + one ledger `moveCredit`). The jackpot
    contract (M2) can deploy alongside — it is additive and cross-generation.
-3. **M3/M4** ride the gen-6 settle path once it exists; **M5** is app-only and
-   can ship any time.
+3. **gen-7** (rules): la partage (M3) on contested dead pools, plus the
+   bonus-chip rule — the Repeats-a-Digit stake now requires a full six-token
+   load, matching what `place` has always required of segment bets. Without
+   it a seated-but-unfunded wallet could buy into the DD pool, and with the
+   jackpot live, into a strike, while contributing nothing to the six
+   segment pools. Built and compiling; **not deployed**.
+4. **M4** rides the gen-6 settle path; **M5** is app-only and can ship any
+   time.
 
 ## Open questions
 
