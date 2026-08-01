@@ -29,6 +29,7 @@ export const ADDRESSES = {
     SeedRegistry: "0x2460C8ed63414F36838542982A5Ab263C9Fcb914", // long-lived ACROSS generations — never redeploy
     CommitRevealEntropy: "0x63614173003957A3AECb6bd22C8cC491f7279F3D", // swappable for VRF later
     SegmentCrank: "0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D", // stateless lock/retire batcher — permissionless, generation-AGNOSTIC: survives redeploys
+    DDJackpot:    "0x73D3c3224Ed4F4fA663878bf32B8605A2DAe96B9", // M2 rolling jackpot — deploy-once, cross-generation; metered strikes, stake-capped
 
     // ── TimbSwap protocol ──────────────────────────────────────────────────
     TimbPrize:    "0x35976f4D2260127848a6274D2eC89ee054412432", // seed source — re-pointed to GameRegistry v5
