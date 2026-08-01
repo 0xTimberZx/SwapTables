@@ -25,14 +25,20 @@ dance the SeedRegistry does.
    `sliceBps` (20%) of the balance, floored at `sliceFloor` (50 TIMBS),
    clamped to the balance. Owner-tunable, slice hard-capped at 50% so one
    strike can never gut the banner. The gen-4 encore anti-drain meter, reused.
-3. **§9 everywhere**: the slice pays only when **2+ distinct wallets** bet
+3. **Your chip is your ceiling** (operator decision, 2026-07-31): a winner's
+   share of the slice is capped at **`stakeCapMult` × their own DD chip**
+   (default 10×), and the uncollected remainder stays on the banner. Two
+   5-chips on a 1,000 banner draw 50 each — not the 200 slice a 1,000-chip
+   table would. Small chips cannot drain what big chips built; wanting more
+   of the jackpot means staking more under it.
+4. **§9 everywhere**: the slice pays only when **2+ distinct wallets** bet
    Double-Digit at that table. A lone wallet grinding empty tables gets
    nothing, ever.
-4. **Once per table, forever** (`struck[board][tableId]`).
-5. **Winners are every DD bettor**, paid pro-rata by DD stake, pushed straight
+5. **Once per table, forever** (`struck[board][tableId]`).
+6. **Winners are every DD bettor**, paid pro-rata by DD stake, pushed straight
    to their wallets — no withdraw step, the hit lands in the wallet as the
    drumroll ends.
-6. **Custody**: guardian may halt strikes and drain to Treasury, nothing
+7. **Custody**: guardian may halt strikes and drain to Treasury, nothing
    else; owner tunes the meter and the trusted-board set, and is renounceable.
 
 ## App
