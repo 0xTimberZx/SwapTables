@@ -82,6 +82,11 @@ solo turnover.
 
 ### M2 — Rolling Double-Digit jackpot (the "play and play" engine)
 
+**Status: IMPLEMENTED 2026-07-31** (`DD_JACKPOT.md`) — cross-generation
+`DDJackpot` contract, trusted-board registry, 20%/50-TIMBS meter
+(owner-tunable, slice ≤ 50%), §9 two-wallet guard, permissionless strike
+fired by the auto-pilot after the sixth lock. Deploy pending.
+
 Double-Digit is already the game's rarest, most legible event (~38% of rounds
 even *can* pay it). Make it progressive:
 
