@@ -1,0 +1,52 @@
+name: frontend
+
+# The app pages are the product here — hand-edited single files, no build
+# step, pushed straight to main. Two things have actually broken them:
+#
+#   - a stray brace ships silently and only surfaces when a player connects
+#     a wallet;
+#   - a generation deploy touches onchain/addresses.js AND three ADDR blocks,
+#     and a page left on a retired board looks perfectly healthy while
+#     transacting against the wrong generation.
+#
+# So this gates pushes to main as well as PRs — direct pushes are the normal
+# way work lands in this repo, and an unchecked one is exactly how a bad
+# address would reach the live site.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "onchain/**"
+      - "scripts/check-frontend.js"
+      - ".github/workflows/frontend.yml"
+  pull_request:
+    paths:
+      - "app/**"
+      - "onchain/**"
+      - "scripts/check-frontend.js"
+      - ".github/workflows/frontend.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: syntax + address drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # No dependencies and no network — plain node against the working tree,
+      # so it runs identically here and locally.
+      - name: Check app pages
+        run: node scripts/check-frontend.js
