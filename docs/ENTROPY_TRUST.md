@@ -55,12 +55,24 @@ is why the fallback branch is currently free to take.
 
 ## Options considered
 
-1. **Void the opener's own bets on any branch it takes.** If a segment
-   settles `viaFallback`, or a re-arm happens, refund the opener's bets in
-   the affected pools rather than settling them. Surgical — removes all
-   profit from both levers, leaves honest operators untouched, needs no bond
-   and no new money. Contained to `_applyLock` and `rearmTable`, but needs
-   care where a voided bet leaves the pot the other players are splitting.
+1. **Forfeit — never refund — the opener's bets in a pool it chose.**
+   First drafted as a *refund* and that was backwards: refunding turns every
+   losing bet into a push, so the opener would stall on every bad reveal.
+   Take the opener holding a bet where reveal loses and fallback wins:
+
+   | variant | reveal | stall to fallback | opener's best move |
+   |---|---|---|---|
+   | today | loses chip | **wins pot** | always stall — the hole |
+   | refund the chosen pool | loses chip | **chip back** | still always stall |
+   | **forfeit** the chosen pool | loses chip | loses chip | **indifferent — lever dead** |
+
+   So the chip stays in the pot and simply cannot win; it flows to the other
+   winners or dies to the reserve. Both branches now lose for the opener,
+   which is what makes the lever worthless, and an operator who just reveals
+   is never touched. Built and compiling once (mark bit per pool set on
+   fallback and on re-arm, zeroed weight in `_weigh`) then reverted —
+   operator chose to wait for a single structural fix instead of layering
+   rules. Recoverable from this description.
 2. **Opener may not bet at its own table.** One line; `opener` is already
    stored as of gen-7. **Sybil-weak** — open with wallet A, bet with wallet
    B, still holding the secrets. Stops casual self-dealing and states the
@@ -72,6 +84,29 @@ is why the fallback branch is currently free to take.
    camera.
 4. **VRF.** Removes the secret, so there is no branch and nothing to choose.
    Re-arm becomes unnecessary. **Chosen direction.**
+
+## A cheaper structural fix worth weighing first
+
+**Drop the secret entirely and arm each segment separately.**
+
+`char_s = keccak(blockhash(lockBlock_s), salt_s)` — no commitment, no reveal,
+therefore **no branch to choose**. Each segment gets its own arm block, so:
+
+- nobody can predict a char before that segment's own block is mined, which
+  is what preserves the staggered drumroll — better than VRF does, since one
+  VRF word makes all six public at callback;
+- whoever arms cannot see the hash of the block they are arming into, so arm
+  timing grants nothing;
+- once mined, **anyone** can lock it, and the auto-pilot would immediately —
+  so the only lever left, stalling to re-arm after 256 blocks, needs every
+  other participant to cooperate in not locking;
+- costs nothing. No oracle, no LINK, no subscription.
+
+The honest caveat: blockhash randomness is influenceable in principle by a
+block proposer willing to withhold a block. Irrelevant for play chips among
+friends; **not** acceptable once the game carries real value. So this is the
+cheap fix that removes the *operator's* edge today, and VRF remains the
+endgame that removes the *proposer's* edge when there is money to defend.
 
 ## VRF notes — what it actually takes
 
@@ -93,6 +128,26 @@ The spec calls the entropy module swappable (§10.6) and it is, for
 - Coordinator address, key hash and subscription for Arbitrum Sepolia must be
   read from Chainlink's docs at build time — do not carry them from memory.
   Funding is LINK on a subscription the board is a consumer of.
+
+### Cost
+
+On **Arbitrum Sepolia the LINK is free** — Chainlink's faucet drips testnet
+LINK on request, so running VRF here costs nothing but setup. The figure that
+matters is therefore *request volume*, not price:
+
+| shape | requests per round | what it costs the show |
+|---|---|---|
+| one word, six chars derived | 1 | all six public at callback — the drumroll is spoilable |
+| one request per segment | 6 | suspense preserved; ~6x the requests |
+
+At six requests a round and a handful of tables a night, that is tens of
+requests per session — trivial against a faucet drip on testnet.
+
+Per-request pricing (callback gas x gas price, plus the v2.5 premium and flat
+fee) was **not verified** while writing this: docs.chain.link returned 403 to
+the fetcher. Read it off Chainlink's supported-networks and billing pages at
+build time. It only becomes a real number on mainnet, where it is also the
+point at which the proposer-influence argument above stops being theoretical.
 
 ## Current standing
 
