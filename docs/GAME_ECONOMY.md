@@ -170,6 +170,14 @@ two distinct wallets.** One rule, four mechanisms.
 4. **M4** rides the gen-6 settle path; **M5** is app-only and can ship any
    time.
 
+## Trust posture
+
+The opener's selection edge — it can compute both the reveal and the fallback
+outcome once armed, and pick between them — is recorded in
+[`ENTROPY_TRUST.md`](ENTROPY_TRUST.md), unfixed and knowingly so. VRF is the
+chosen direction; note that the entropy seam is synchronous, so VRF costs a
+board generation rather than a module swap.
+
 ## Open questions
 
 1. Jackpot slice percentage and floor (20% / 50 TIMBS are placeholders), and
