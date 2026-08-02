@@ -24,7 +24,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT  = path.resolve(__dirname, "..");
-const PAGES = ["app/index.html", "app/play.html", "app/live.html"];
+const PAGES = ["app/index.html", "app/play.html", "app/live.html", "app/games.html"];
 
 // ADDR key in the pages  ->  name in onchain/addresses.js
 const KEYMAP = {
