@@ -6,7 +6,16 @@ export const ADDRESSES = {
   arbitrumSepolia: {
     chainId: 421614,
 
-    // ── SwapTables board, generation 6 — the accounting generation (live) ──
+    // ── SwapTables board, generation 7 — the bonus-chip generation (live) ──
+    //
+    // One rule change from gen-6: the Repeats-a-Digit stake now requires a
+    // full six-token load (`placeDoubleDigit` reverts NotLoaded). Until gen-7
+    // a seated-but-unfunded wallet could buy the DD stake — and, with the
+    // jackpot live, buy into a strike — while contributing nothing to the six
+    // segment pools. No ABI surface was added, so the apps read gen-7 as
+    // gen-6 and that is correct. Deployed 2026-08-03.
+    //
+    // The gen-6 notes below still describe the money mechanics, unchanged:
     //
     // Gen-5's adaptive timing unchanged (dials 2400/300/120/180/900), plus
     // the money mechanics (docs/UNDERWRITE_SPEC.md, GEN6_DEALER_TIP.md,
@@ -23,11 +32,11 @@ export const ADDRESSES = {
     //     lock, credit-to-credit, zero rake.
     // tables() appends `opener`; the apps feature-detect gen on connect.
     // Deployed 2026-07-31.
-    SegmentBoard: "0x1de9889da2083F5f1693DfCf589A453E9b39EEA7", // state machine + pari-mutuel settlement + tips
-    PoolLedger:   "0x819B5074312E4ADD9D72D722D9C6a38320796Bd8", // custodies chips PER TABLE; credits + pays winners
-    UnderwriteReserve: "0xa0f88d8504D340702889C48288D8FB9329D88184", // the top-up float; income = dead pots + half rake
+    SegmentBoard: "0xf3FF34488D472b89497Cf31631c77bE85524A65a", // state machine + pari-mutuel settlement + tips
+    PoolLedger:   "0xAA4f4303b747bEa63F9818Bc9C38dAe5aebDe218", // custodies chips PER TABLE; credits + pays winners
+    UnderwriteReserve: "0x73b7fBbA866859e241e87e39e2aDC81711902D7A", // the top-up float; income = dead pots + half rake
     SeedRegistry: "0x2460C8ed63414F36838542982A5Ab263C9Fcb914", // long-lived ACROSS generations — never redeploy
-    CommitRevealEntropy: "0x63614173003957A3AECb6bd22C8cC491f7279F3D", // swappable for VRF later
+    CommitRevealEntropy: "0x57A1F889A30178b62Bc39844D73B68d0f8a274d6", // swappable for VRF later
     SegmentCrank: "0x09B8bC3eD49491DA2AaC47ad6DDC9A0cB6B2783D", // stateless lock/retire batcher — permissionless, generation-AGNOSTIC: survives redeploys
     DDJackpot:    "0x73D3c3224Ed4F4fA663878bf32B8605A2DAe96B9", // M2 rolling jackpot — deploy-once, cross-generation; metered strikes, stake-capped
 
@@ -60,6 +69,16 @@ export const ADDRESSES = {
 // ── Retired — do not wire anything to these ────────────────────────────────
 export const RETIRED = {
   arbitrumSepolia: {
+    // gen 6: nothing broken — superseded 2026-08-03 by gen-7's bonus-chip
+    // rule. Its ledger still pays withdrawals of remaining credits, and its
+    // reserve was drained to Treasury before the switch (a fresh reserve is
+    // deployed per generation because setBoard on it is one-time).
+    gen6: {
+      SegmentBoard: "0x1de9889da2083F5f1693DfCf589A453E9b39EEA7",
+      PoolLedger:   "0x819B5074312E4ADD9D72D722D9C6a38320796Bd8",
+      UnderwriteReserve: "0xa0f88d8504D340702889C48288D8FB9329D88184",
+      CommitRevealEntropy: "0x63614173003957A3AECb6bd22C8cC491f7279F3D",
+    },
     // gen 5: nothing broken — superseded 2026-07-31 (same day) by gen-6's
     // accounting mechanics; the adaptive timing it introduced carries
     // forward unchanged. Ledger still pays withdrawals of remaining credits.
