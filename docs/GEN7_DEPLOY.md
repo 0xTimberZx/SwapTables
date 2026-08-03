@@ -1,8 +1,15 @@
 # Generation 7 — the bonus-chip rule
 
-Built and tested; **not deployed**. Gen-6 (`0x1de9889d…`) is live. This is the
-runbook for putting gen-7 up, written from a read of the deploy script and the
-live contracts rather than from the last generation's memory.
+**Deployed 2026-08-03.** Gen-6 (`0x1de9889d…`) is retired; its ledger still pays
+withdrawals. What follows is the runbook as written before the deploy, plus a
+record of what actually happened at the end.
+
+| contract | address | sourcify |
+|---|---|---|
+| SegmentBoard | `0xf3FF34488D472b89497Cf31631c77bE85524A65a` | `exact_match` |
+| PoolLedger | `0xAA4f4303b747bEa63F9818Bc9C38dAe5aebDe218` | `exact_match` |
+| UnderwriteReserve | `0x73b7fBbA866859e241e87e39e2aDC81711902D7A` | `exact_match` |
+| CommitRevealEntropy | `0x57A1F889A30178b62Bc39844D73B68d0f8a274d6` | `exact_match` |
 
 **Gen-7's source is `contracts/SegmentBoard.sol` at commit `1d21ba8`** and it has
 not moved since. Generation 8 lives in a *separate* file
@@ -123,3 +130,33 @@ cast call $JACKPOT "trustedBoard(address)(bool)" $BOARD
 
 Then open a table, seat two wallets, and confirm the rule: a seated-but-unloaded
 wallet calling `placeDoubleDigit` reverts `NotLoaded()`.
+
+## What actually happened
+
+Clean run. The script deployed all four and made all four wiring calls itself
+(`ledger.setBoard`, `reserve.setBoard`, `reserve.approveLedger`,
+`seedRegistry.addWriter`), so only the token whitelists, the seed approval and
+`DDJackpot.setBoard(newBoard, true)` were left to do by hand.
+
+**The reserve trap did not bite** — gen-6's reserve read zero before the switch,
+so nothing was stranded by the per-generation redeploy. The new reserve was
+seeded with 2,500 TIMBS by plain transfer, which is what makes M1 top-ups work
+from the first table instead of waiting for dead pots to accumulate. Its
+guardian is the deployer (`0x42536623…`), so `drainToTreasury` is available when
+gen-8 replaces it — check that before the next deploy rather than after.
+
+Two snags worth carrying forward:
+
+- **`--verify` resolves the `[etherscan]` block even under `--verifier sourcify`,**
+  so the first run died on a missing `ARBISCAN_API_KEY` *after* broadcasting
+  successfully. The contracts were fine; only verification failed. Any non-empty
+  value satisfies the interpolation, and sourcify ignores it.
+- **Verification is easiest per-contract, after the fact.**
+  `forge verify-contract <addr> <path>:<name> --chain-id 421614 --verifier
+  sourcify --verifier-url https://sourcify.dev/server --guess-constructor-args
+  --rpc-url $ARB_SEPOLIA_RPC --watch` needs no hand-encoded arguments — it reads
+  them off the creation transaction, which matters for the board's thirteen.
+  `forge script --resume` also works but requires `--broadcast` alongside it.
+
+Compiler settings come from `foundry.toml` automatically, which is why all four
+landed as `exact_match` rather than a partial metadata match.
