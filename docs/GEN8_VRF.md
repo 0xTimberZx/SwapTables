@@ -149,22 +149,38 @@ Coordinator and key hash are network facts — read them off Chainlink's
 supported-networks table at deploy time. Do not carry them from an older
 runbook.
 
-**`VRF_EXTRA_ARGS`.** The v2.5 request carries an `extraArgs` blob that selects
-LINK vs native payment. It is
-`abi.encodeWithSelector(EXTRA_ARGS_V1_TAG, ExtraArgsV1({nativePayment: …}))`
-with `EXTRA_ARGS_V1_TAG = bytes4(keccak256("VRF ExtraArgsV1"))`. Deriving that
-gives:
+**`VRF_EXTRA_ARGS`.** The v2.5 request carries an `extraArgs` blob selecting LINK
+vs native payment. **Verified against Chainlink's own source** — `VRFV2PlusClient.sol`
+from `@chainlink/contracts` on npm, which is reachable even where docs.chain.link
+is not:
+
+```solidity
+bytes4 public constant EXTRA_ARGS_V1_TAG = bytes4(keccak256("VRF ExtraArgsV1"));
+function _argsToBytes(ExtraArgsV1 memory a) internal pure returns (bytes memory) {
+  return abi.encodeWithSelector(EXTRA_ARGS_V1_TAG, a);
+}
+```
+
+so the tag is `0x92fd1338` and the blob is that followed by the abi-encoded bool:
 
 ```
 LINK payment    0x92fd13380000000000000000000000000000000000000000000000000000000000000000
 native payment  0x92fd13380000000000000000000000000000000000000000000000000000000000000001
 ```
 
-**Treat the first as a candidate, not a fact.** The tag formula is public but the
-exact string it hashes could not be verified while writing this (docs.chain.link
-403s from the build environment), and a wrong tag produces requests the
-coordinator rejects. Phase 4 proves it for the price of one transaction, before
-any player is at a table — which is why phase 4 exists.
+Use the **LINK** one unless you deliberately want native billing.
+
+The same read confirmed the two things `VRFEntropy.sol` declares by hand rather
+than importing. `RandomWordsRequest` is
+`(bytes32 keyHash, uint256 subId, uint16 requestConfirmations, uint32 callbackGasLimit,
+uint32 numWords, bytes extraArgs)` — field-for-field what the module declares, and
+that order is part of the ABI — and the coordinator's entry point is
+`requestRandomWords(RandomWordsRequest calldata) external returns (uint256)`.
+A mismatch in either would have made every request revert; both match.
+
+Coordinator address and key hash are the only values still to be read at deploy
+time. They are deployment data, not source, so they are not in the npm package
+and must come off Chainlink's supported-networks table.
 
 **Dials.** Carry gen-7's over unless you want a change:
 `2400 / 300 / 120 / 180 / 900`. The reveal-gap dial is a *console* setting, not a
