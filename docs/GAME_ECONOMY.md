@@ -108,12 +108,42 @@ becomes appointment television.
 
 ### M3 — La partage on contested dead pools (bankroll preservation)
 
+**Status: simulated 2026-08-03 ([`RESERVE_SOLVENCY.md`](RESERVE_SOLVENCY.md)) —
+approved in the overflow-funded form only.**
+
 Roulette's half-back rule, transplanted: when a **contested** pool settles
-with no winner, half the pot returns to its bettors pro-rata as credit, half
-feeds the jackpot. Session length is bankroll length — players who lose
-*slower* play *longer*, and the half that leaves them funds the thing that
-brings them back. Explicitly **not** applied to solo pools (breaks the
-reserve; a lone farmer would be subsidised for betting into nothing).
+with no winner, half the pot returns to its bettors pro-rata as credit. Session
+length is bankroll length — players who lose *slower* play *longer*. Explicitly
+**not** applied to solo pools (breaks the reserve; a lone farmer would be
+subsidised for betting into nothing).
+
+The half-back is paid **out of the overflow earmark**, never off the top of the
+dead pot. That distinction is the whole verdict:
+
+- **overflow-funded** leaves top-ups, coverage and the reserve's floor identical
+  to today — zero cost by construction, because the earmark is by definition the
+  money the reserve does not need. It returns ~331/round in a cold streak and
+  pays nothing in a hot one, which is exactly when bankroll preservation is and
+  is not wanted.
+- **off the top** cuts winner-heavy underwrite coverage from 54% to 32%. Dead
+  pots are scarce precisely where the reserve is already short, so halving them
+  takes from the wrong pocket.
+
+The farm-resistance table below always said overflow-only; this prose used to say
+off-the-top and split it with the jackpot. Overflow-only is correct.
+
+Two prerequisites: `overflowEarmark` is today a **counter with no spend path**,
+so M3 is a reserve change rather than a board change; and the waterfall's
+half-la-partage / half-jackpot split has to be enforced, because at a raised
+`floatTarget` the half-backs would otherwise consume the whole earmark and
+quietly starve M2.
+
+### Dead-pot stake-back — closed, not affordable
+
+Returning every stake from a no-winner pool was weighed on the same simulation
+and rejected: underwrite coverage collapses to 9.6% / 4.0%, so M1 stops
+functioning in both regimes. It also makes betting into a pool you expect to die
+free, which is a farm surface §9's two-wallet rule does not cover.
 
 ### M4 — Encore tables (already designed, now load-bearing)
 
@@ -161,14 +191,20 @@ two distinct wallets.** One rule, four mechanisms.
 2. **gen-6** (accounting): monotonic underwrite (M1) + reserve, dealer tips
    (M6 — one appended table field + one ledger `moveCredit`). The jackpot
    contract (M2) can deploy alongside — it is additive and cross-generation.
-3. **gen-7** (rules): la partage (M3) on contested dead pools, plus the
-   bonus-chip rule — the Repeats-a-Digit stake now requires a full six-token
-   load, matching what `place` has always required of segment bets. Without
-   it a seated-but-unfunded wallet could buy into the DD pool, and with the
-   jackpot live, into a strike, while contributing nothing to the six
-   segment pools. Built and compiling; **not deployed**.
+3. **gen-7** (rules): the bonus-chip rule — the Repeats-a-Digit stake now
+   requires a full six-token load, matching what `place` has always required of
+   segment bets. Without it a seated-but-unfunded wallet could buy into the DD
+   pool, and with the jackpot live, into a strike, while contributing nothing to
+   the six segment pools. Built and tested; **not deployed** —
+   [`GEN7_DEPLOY.md`](GEN7_DEPLOY.md) is the runbook, and it carries a trap
+   worth reading before the deploy: the script mints a fresh UnderwriteReserve
+   every generation and the gen-6 float does not travel with it.
+   **M3 no longer rides this generation** — it turned out to be a reserve change,
+   not a board change (the earmark needs a spend path), so it is independent of
+   the board's generation clock entirely.
 4. **M4** rides the gen-6 settle path; **M5** is app-only and can ship any
-   time.
+   time. `setFloatTarget(10_000e18)` is a one-call change on the live reserve
+   and needs no generation at all.
 
 ## Trust posture
 
@@ -180,9 +216,20 @@ board generation rather than a module swap.
 
 ## Open questions
 
-1. Jackpot slice percentage and floor (20% / 50 TIMBS are placeholders), and
-   `FLOAT_TARGET` for the reserve waterfall (should cover several rounds of
-   worst-case round caps — e.g. 3 × MAX_ROUND_UNDERWRITE = 4,500).
+1. Jackpot slice percentage and floor (20% / 50 TIMBS are placeholders).
+   ~~`FLOAT_TARGET`~~ **Answered 2026-08-03: 4,500 is too low.** The waterfall
+   pins free float at the target, and the 10% fraction cap then limits any one
+   grant to ~450, so loser-heavy rounds cover only 62% of what M1 asks for while
+   1.48M sits parked in overflow. Raising it to 10,000 takes coverage to 91% and
+   still leaves ~905K of overflow. `setFloatTarget` is an owner call on the live
+   reserve — no redeploy. See [`RESERVE_SOLVENCY.md`](RESERVE_SOLVENCY.md).
+1c. **New, unresolved: the reserve is income-bound in winner-heavy rounds.** M1
+   asks for 288/round there and the reserve takes in 155/round, so it grants
+   ~155 — about half the promise — and that number does not move for any float
+   target, fraction cap or pool/round cap. The levers are a bigger rake share, a
+   lower `PAYOUT_RATIO_BPS`, or budgeted Treasury support. It degrades
+   gracefully (winners get less top-up, never less than the pool pays), so this
+   is a tuning question, not a solvency emergency.
 1b. Rake share (50/50 reserve/Treasury is the sim-tested placeholder — Treasury
    keeps half of a busier game rather than all of a subsidised one).
 2. Does la partage credit auto-stake into the encore round (stickier, but more
