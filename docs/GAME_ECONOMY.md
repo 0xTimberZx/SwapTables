@@ -210,9 +210,12 @@ two distinct wallets.** One rule, four mechanisms.
 
 The opener's selection edge — it can compute both the reveal and the fallback
 outcome once armed, and pick between them — is recorded in
-[`ENTROPY_TRUST.md`](ENTROPY_TRUST.md), unfixed and knowingly so. VRF is the
-chosen direction; note that the entropy seam is synchronous, so VRF costs a
-board generation rather than a module swap.
+[`ENTROPY_TRUST.md`](ENTROPY_TRUST.md). **Fixed in generation 8**
+([`GEN8_VRF.md`](GEN8_VRF.md)): one Chainlink VRF draw per segment, no secret,
+no fallback path, so there is no longer a second outcome to select. It did cost
+a board generation, as predicted — the old entropy seam was all `view` and a
+view cannot wait for an oracle. Built and tested; not yet deployed, so every
+live generation still carries the edge until it is.
 
 ## Open questions
 

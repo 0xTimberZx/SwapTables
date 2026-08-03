@@ -151,9 +151,21 @@ point at which the proposer-influence argument above stops being theoretical.
 
 ## Current standing
 
-Living with it, knowingly, on a testnet playing for play chips among people
-who know each other. The operator is the opener on essentially every table,
-so the exploit is available and unexercised by choice rather than by
-construction. That is an acceptable posture for now and an unacceptable one
-the moment the game carries value — the note exists so the decision is
-deliberate rather than forgotten.
+**Superseded 2026-08-03 — option 4 is built.** Generation 8
+([`GEN8_VRF.md`](GEN8_VRF.md)) removes the secret entirely: one Chainlink VRF
+draw per segment, no commitments, permissionless argument-free locking, and no
+fallback derivation at all. One path means nothing to select, so the edge
+measured above goes to zero by construction rather than by rule. The only stall
+escape re-draws an *unfulfilled* request — a choice between two unknowables —
+and a landed draw can never be replaced by anyone, owner included. Built and
+tested; not yet deployed.
+
+Until it is, generations up to 7 still carry the hole, and this remains the
+honest description of them:
+
+> Living with it, knowingly, on a testnet playing for play chips among people
+> who know each other. The operator is the opener on essentially every table,
+> so the exploit is available and unexercised by choice rather than by
+> construction. That is an acceptable posture for now and an unacceptable one
+> the moment the game carries value — the note exists so the decision is
+> deliberate rather than forgotten.

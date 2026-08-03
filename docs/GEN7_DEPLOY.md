@@ -4,6 +4,12 @@ Built and tested; **not deployed**. Gen-6 (`0x1de9889d…`) is live. This is the
 runbook for putting gen-7 up, written from a read of the deploy script and the
 live contracts rather than from the last generation's memory.
 
+**Gen-7's source is `contracts/SegmentBoard.sol` at commit `1d21ba8`** and it has
+not moved since. Generation 8 lives in a *separate* file
+(`contracts/SegmentBoardVRF.sol`, [`GEN8_VRF.md`](GEN8_VRF.md)) precisely so this
+one stays deployable unchanged — `DeploySegmentBoard.s.sol` still builds gen-7,
+`DeploySegmentBoardVRF.s.sol` builds gen-8. Check which script you are running.
+
 ## Scope — one rule
 
 `placeDoubleDigit` now requires a full six-token load:
