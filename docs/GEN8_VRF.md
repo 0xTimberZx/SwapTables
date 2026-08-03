@@ -152,10 +152,17 @@ under 2²⁵⁶ (`0x6f3ddbd0…ccc8f7`). All three were checked before use, beca
 malformed one here surfaces as a revert inside `requestRandomWords` at arm time
 rather than at deploy.
 
-Still needed before phase 3: **LINK in the subscription**, and `VRFEntropy`
-added as a consumer of it. Testnet LINK is free from the faucet. Note the
-ordering trap — the consumer can only be added *after* the module is deployed,
-so that step belongs to phase 3, not here.
+**LINK: funded, 50.** Far more than a testing run needs — a round is six
+requests on the 50 gwei lane with a 200k callback. What is *not* done here is
+adding `VRFEntropy` as a consumer, and that is an ordering constraint rather
+than an oversight: the module has to exist before it can be named, so the
+consumer add belongs to phase 3. Until it lands, every `armSegment` reverts
+inside the coordinator regardless of the balance.
+
+The constructor args were encoded and round-tripped against these values before
+deploy (9 words; `extraArgs` at offset `0xc0`, length `0x24` — a 4-byte tag plus
+one abi-encoded bool). Cheap to check, and it is the last point at which a typo
+in `.env` is free.
 
 **Who owns the subscription.** The subscription owner adds and removes
 consumers and withdraws the LINK; it is not a contract role, so
