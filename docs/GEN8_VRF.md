@@ -136,18 +136,31 @@ reserve. Deploying gen-8 from a key you are about to retire means doing the
 whole rotation twice. Rotate, then deploy gen-8 from the new wallet, and it owns
 everything from birth.
 
-**Chainlink prerequisites** (vrf.chain.link, Arbitrum Sepolia):
+**Chainlink prerequisites** (vrf.chain.link, Arbitrum Sepolia). Subscription
+created and read off the subscription page:
 
-| what | why |
-|---|---|
-| a VRF v2.5 **subscription** | the board's draws bill to it |
-| **LINK** in it | six requests per round; testnet LINK is free from the faucet |
-| the **coordinator address** | constructor arg |
-| a **key hash** (gas lane) | constructor arg |
+```bash
+export VRF_COORDINATOR=0x5CE8D5A2BC84beb22a398CCA51996F7930313D61
+export VRF_KEY_HASH=0x1770bdc7eec7771f7ba4ffd640f34260d7f095b79c92d34a5b2551d6f6cfd2be
+export VRF_SUB_ID=50316020964400506132465447965056776521389361135399962393916048632548676126967
+```
 
-Coordinator and key hash are network facts — read them off Chainlink's
-supported-networks table at deploy time. Do not carry them from an older
-runbook.
+The subscription id is a `uint256` in v2.5 (v2 used a small `uint64`) — pass it
+as the decimal string above; `vm.envUint` takes it whole. The coordinator
+checksums clean, the key hash is a full 32 bytes, and the id is comfortably
+under 2²⁵⁶ (`0x6f3ddbd0…ccc8f7`). All three were checked before use, because a
+malformed one here surfaces as a revert inside `requestRandomWords` at arm time
+rather than at deploy.
+
+Still needed before phase 3: **LINK in the subscription**, and `VRFEntropy`
+added as a consumer of it. Testnet LINK is free from the faucet. Note the
+ordering trap — the consumer can only be added *after* the module is deployed,
+so that step belongs to phase 3, not here.
+
+**Who owns the subscription.** The subscription owner adds and removes
+consumers and withdraws the LINK; it is not a contract role, so
+`scripts/check-roles.js` cannot see it and a rotation audit will read clean with
+this still on a retired key. It must be the same wallet the rotation moved to.
 
 **`VRF_EXTRA_ARGS`.** The v2.5 request carries an `extraArgs` blob selecting LINK
 vs native payment. **Verified against Chainlink's own source** — `VRFV2PlusClient.sol`
@@ -178,11 +191,37 @@ that order is part of the ABI — and the coordinator's entry point is
 `requestRandomWords(RandomWordsRequest calldata) external returns (uint256)`.
 A mismatch in either would have made every request revert; both match.
 
-Coordinator address and key hash are the only values still to be read at deploy
-time. They are deployment data, not source, so they are not in the npm package
-and must come off Chainlink's supported-networks table.
+**The two VRF dials.**
 
-**Dials.** Carry gen-7's over unless you want a change:
+```bash
+export VRF_CONFIRMATIONS=3
+export VRF_CALLBACK_GAS=200000
+```
+
+*Confirmations = 3*, the coordinator's minimum. Confirmations exist so the
+requester cannot see the seed and then reorg the request away. Arbitrum is an L2
+with a single sequencer and no short-depth reorgs, so depth beyond the minimum
+buys nothing and costs latency on every segment — and latency here is the
+drumroll. Blocks are ~250ms, so three is well under a second.
+
+*Callback gas = 200,000.* `rawFulfillRandomWords` is deliberately tiny — it
+writes two slots and emits, and settlement is elsewhere precisely so the
+callback cannot revert. Counting it out: two cold SLOADs for `saltOf[requestId]`
+and `draws[salt].ready` (2,100 each), a cold zero→nonzero SSTORE for `d.word`
+(22,100), a warm SSTORE for `d.ready` into the already-nonzero packed slot
+(2,900), and a 3-topic LOG (1,500). Call it ~33k with the odds and ends. 200,000
+is six times that.
+
+The headroom is free: v2.5 bills on gas *used* plus the coordinator's overhead
+and premium, not on the limit, and Arbitrum Sepolia's ceiling is 2,500,000. What
+it buys is cover for Arbitrum's L1-data gas accounting and for the callback
+growing later. Under-setting this is the expensive mistake — an out-of-gas
+callback consumes the request and strands the segment until `rerequest` clears
+it 30 minutes on.
+
+Both are `setPolicy`-tunable after deploy, so neither is a one-way door.
+
+**Board dials.** Carry gen-7's over unless you want a change:
 `2400 / 300 / 120 / 180 / 900`. The reveal-gap dial is a *console* setting, not a
 constructor arg, and phase 4 is where you learn what it should be.
 
@@ -203,9 +242,14 @@ forge script scripts/DeploySegmentBoardVRF.s.sol \
 
 Leave `--verify` off and verify afterwards per contract — that is what worked
 for gen-7, and it keeps a verification failure from looking like a deploy
-failure. `.env` needs the four VRF values plus the usual
-`SEED_REGISTRY_ADDRESS=0x2460C8ed…` (the registry is long-lived; leaving it
-unset silently discards the no-reused-seed guarantee).
+failure.
+
+`.env` needs all six VRF values from phase 0 — `VRF_COORDINATOR`,
+`VRF_KEY_HASH`, `VRF_SUB_ID`, `VRF_EXTRA_ARGS`, `VRF_CONFIRMATIONS`,
+`VRF_CALLBACK_GAS` — plus the usual `SEED_REGISTRY_ADDRESS=0x2460C8ed…` (the
+registry is long-lived; leaving it unset silently discards the no-reused-seed
+guarantee). Put them in `.env` and let `forge` read the file; do not paste keys
+or values inline on the command line.
 
 The script deploys PoolLedger, VRFEntropy, UnderwriteReserve and
 SegmentBoardVRF, and wires `ledger.setBoard`, `reserve.setBoard`,
