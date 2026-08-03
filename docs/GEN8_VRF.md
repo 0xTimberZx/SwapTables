@@ -122,41 +122,148 @@ request ids and fulfils on command. Aimed at the property gen-8 exists to buy:
 - a full round settles and the ledger drains to zero; a winning Exactly bet
   still pays; gen-7's bonus-chip rule is carried; cancel still works.
 
-## Deploy
+## Deploy — order of operations
 
-`scripts/DeploySegmentBoardVRF.s.sol`. Read [`GEN7_DEPLOY.md`](GEN7_DEPLOY.md)
-first — **every trap there applies here too**, in particular that the script
-mints a fresh `UnderwriteReserve` whose `setBoard` is one-time, so the old float
-must be `drainToTreasury()`'d out before it is stranded, and the new one seeded
-by plain transfer rather than `fundBudgeted`.
+Read [`GEN7_DEPLOY.md`](GEN7_DEPLOY.md) alongside this: **every trap there
+applies**, and its "what actually happened" section is the record of which ones
+bit. What follows is only the sequence, with gen-8's own additions called out.
 
-Two steps unique to gen-8, and the round cannot run without either:
+### Phase 0 — before anything moves
 
-1. **Add `VRFEntropy` as a consumer** on the VRF subscription at vrf.chain.link.
-   Until then every `armSegment` reverts.
-2. **Fund the subscription with LINK.** Six requests per round.
+**Rotate the deployer key first.** As of the gen-7 deploy the deployer holds
+owner on the board, ledger, reserve, jackpot and registry, plus guardian on the
+reserve. Deploying gen-8 from a key you are about to retire means doing the
+whole rotation twice. Rotate, then deploy gen-8 from the new wallet, and it owns
+everything from birth.
 
-`.env` additions: `VRF_COORDINATOR`, `VRF_KEY_HASH`, `VRF_SUB_ID`,
-`VRF_EXTRA_ARGS`, optionally `VRF_CONFIRMATIONS` (3) and `VRF_CALLBACK_GAS`
-(200,000). All of the first four are network facts — read them at deploy time.
+**Chainlink prerequisites** (vrf.chain.link, Arbitrum Sepolia):
 
-### Apps
+| what | why |
+|---|---|
+| a VRF v2.5 **subscription** | the board's draws bill to it |
+| **LINK** in it | six requests per round; testnet LINK is free from the faucet |
+| the **coordinator address** | constructor arg |
+| a **key hash** (gas lane) | constructor arg |
 
-Gen-8 is the first generation whose *ABI* changes the operator flow, so the
-console and watch pages need real work, not just an address bump:
+Coordinator and key hash are network facts — read them off Chainlink's
+supported-networks table at deploy time. Do not carry them from an older
+runbook.
 
-- `openTable` loses its commitments argument, so the passphrase/secrets machinery
-  in the console has nothing left to do — delete it rather than leave it dark.
-- Auto-pilot changes shape: instead of `armTable` then six `lockSegment(secret)`
-  calls, it becomes, per segment, `armSegment` → poll `segmentState` → `lockSegment`,
-  with `rearmSegment` when `replaceable` turns true. The reveal-gap dial now
-  spaces the **arms**, since that is what paces the drumroll.
-- `SegmentCrank`'s `lockAll` takes secrets and will not work against gen-8. Either
-  a new crank or per-segment calls; per-segment is honest here anyway, because
-  batching six locks into one transaction would collapse the drumroll the
-  per-segment design exists to protect.
-- Feature detection: probe `armedMask`-bearing `tables()` (16 words) or simply
-  `segmentState(uint256,uint8)`, which no earlier generation has.
+**`VRF_EXTRA_ARGS`.** The v2.5 request carries an `extraArgs` blob that selects
+LINK vs native payment. It is
+`abi.encodeWithSelector(EXTRA_ARGS_V1_TAG, ExtraArgsV1({nativePayment: …}))`
+with `EXTRA_ARGS_V1_TAG = bytes4(keccak256("VRF ExtraArgsV1"))`. Deriving that
+gives:
+
+```
+LINK payment    0x92fd13380000000000000000000000000000000000000000000000000000000000000000
+native payment  0x92fd13380000000000000000000000000000000000000000000000000000000000000001
+```
+
+**Treat the first as a candidate, not a fact.** The tag formula is public but the
+exact string it hashes could not be verified while writing this (docs.chain.link
+403s from the build environment), and a wrong tag produces requests the
+coordinator rejects. Phase 4 proves it for the price of one transaction, before
+any player is at a table — which is why phase 4 exists.
+
+**Dials.** Carry gen-7's over unless you want a change:
+`2400 / 300 / 120 / 180 / 900`. The reveal-gap dial is a *console* setting, not a
+constructor arg, and phase 4 is where you learn what it should be.
+
+### Phase 1 — wind gen-7 down
+
+- Retire or cancel every live table.
+- `UnderwriteReserve(0x73b7fBbA…).drainToTreasury()` from the **guardian**. Gen-7
+  is the first generation whose reserve actually holds a float (2,500 TIMBS), so
+  unlike the gen-6 → gen-7 switch this one genuinely strands money if skipped.
+- Players withdraw at leisure; the gen-7 ledger keeps paying forever.
+
+### Phase 2 — deploy
+
+```bash
+forge script scripts/DeploySegmentBoardVRF.s.sol \
+  --rpc-url $ARB_SEPOLIA_RPC --broadcast -vvvv
+```
+
+Leave `--verify` off and verify afterwards per contract — that is what worked
+for gen-7, and it keeps a verification failure from looking like a deploy
+failure. `.env` needs the four VRF values plus the usual
+`SEED_REGISTRY_ADDRESS=0x2460C8ed…` (the registry is long-lived; leaving it
+unset silently discards the no-reused-seed guarantee).
+
+The script deploys PoolLedger, VRFEntropy, UnderwriteReserve and
+SegmentBoardVRF, and wires `ledger.setBoard`, `reserve.setBoard`,
+`reserve.approveLedger`, `entropy.setBoard` and — if the deployer owns it —
+`seedRegistry.addWriter`. **`entropy.setBoard` is new and load-bearing**: without
+it every `armSegment` reverts `NotBoard`.
+
+Then verify:
+
+```bash
+forge verify-contract <addr> <path>:<name> --chain-id 421614 \
+  --verifier sourcify --verifier-url https://sourcify.dev/server \
+  --guess-constructor-args --rpc-url $ARB_SEPOLIA_RPC --watch
+```
+
+### Phase 3 — wire what the script cannot
+
+| call | from | notes |
+|---|---|---|
+| **add `VRFEntropy` as a consumer** | subscription owner, at vrf.chain.link | **gen-8 only** — until this, every arm reverts |
+| **fund the subscription** | anyone | **gen-8 only** — six requests a round |
+| `TIMBS.setTransferWhitelist(newLedger, true)` | token owner | large payouts trip `maxTransferAmount` without it |
+| `TIMBS.setTransferWhitelist(newReserve, true)` | token owner | reserve → ledger pulls hit the same cap |
+| `TIMBS.approve(newLedger, budget)` | **seed funder** | `openTable` pulls 100 per table; check `seedFunder()` is the wallet you think |
+| plain `TIMBS.transfer(newReserve, …)` | Treasury | the drained gen-7 float — **not** `fundBudgeted`, which reverts while `treasuryEarned` is 0 |
+| `DDJackpot.setBoard(newBoard, true)` | jackpot owner | an untrusted board reverts `BoardNotTrusted` |
+
+### Phase 4 — prove the draw works, before anyone is watching
+
+This phase has no gen-7 equivalent and it is the one that matters. Open a table,
+seat and fund two wallets, then arm **one** segment and watch it through:
+
+```bash
+cast send $B "armSegment(uint256,uint8)" $ID 1 --rpc-url $ARB_SEPOLIA_RPC --private-key $KEY
+cast call $B "segmentState(uint256,uint8)(bool,bool,bool,bool,bool)" $ID 1 --rpc-url $ARB_SEPOLIA_RPC
+```
+
+What each failure tells you:
+
+| symptom | cause |
+|---|---|
+| `armSegment` reverts `NotBoard` | `entropy.setBoard` never ran |
+| `armSegment` reverts inside the coordinator | wrong `extraArgs`, wrong key hash, or the consumer was never added |
+| arm succeeds, `drawIn` never turns true | subscription out of LINK, or callback gas too low |
+| `drawIn` true, `lockSegment` reverts | should not happen — report it |
+
+**Time the gap between the arm landing and `drawIn` turning true.** That latency
+is new in gen-8 and it sets the console's reveal spacing: the dial paces the
+*arms*, so the real beat is `gap + fulfilment latency`. Measure it before
+choosing a number, and expect a round to take longer end-to-end than gen-7's.
+
+Then finish the round — six arms, six locks, retire — and confirm the ledger
+drains to zero. Only after that is it worth putting on stream.
+
+### Phase 5 — addresses and docs
+
+`config.js` (TimbSwap) and `onchain/addresses.js` (SwapTables), then the `ADDR`
+block in **four** pages. `scripts/check-frontend.js` gates the agreement, so a
+page left on gen-7 fails CI rather than quietly transacting against it. Move
+gen-7 into `RETIRED` and add gen-8 to `SPECS.md`.
+
+**The app code is already done** (shipped 2026-08-03): all four pages detect
+gen-8 by probing `segmentState`, the console hides the passphrase and the
+fallback-lock, `Arm` fires one draw for the next segment, `Reveal all six` locks
+whatever has come back rather than going through `SegmentCrank`, and auto-pilot
+runs arm → wait → lock with one segment in flight. Only the addresses change.
+
+### Phase 6 — collapse the duplication
+
+Once gen-8 is live and gen-7 retired: delete `contracts/SegmentBoard.sol`, rename
+`SegmentBoardVRF.sol` to `SegmentBoard.sol`, and retire the gen-5/6/7 suites that
+only exist to guard the commit-reveal board. Doing it before gen-8 is proven
+would leave nothing to fall back to; leaving it undone indefinitely is how two
+boards drift apart.
 
 ## What is still not fixed
 
