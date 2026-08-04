@@ -184,6 +184,19 @@ Every subsidy traced against a lone-wallet attacker:
 The recurring pattern is §9's: **no subsidy flows to a pool with fewer than
 two distinct wallets.** One rule, four mechanisms.
 
+> **Known finding (gen-8), fixed in gen-9.** The two-distinct-wallets rule stops
+> a *single* wallet self-dealing but not two Sybil wallets, and two are free on a
+> permissionless chain. Hedging Red against Black across all six segments makes
+> one of the operator's own wallets win every pool, harvesting ~79% of the table
+> seed risk-free (~78.6 TIMBS on a 100 seed). No fixed threshold closes it —
+> Sybil-resistance isn't achievable on-chain. The gen-9 fix routes the **whole
+> seed to the reserve** so it never sits in a distributable pot; the house then
+> sweetens only through the capped underwrite path, which is provably un-farmable
+> (0.90× fair, real wins only). Honest winners are unaffected — the top-up
+> backstops them to the same `stake × fair × 0.90` either way. Full write-up and
+> reproduction: `dev-docs/AUDIT_SEED_FARM.md` (TimbSwap repo). The DDJackpot
+> strike gate shares the flaw and the fix.
+
 ## Sequencing
 
 1. **gen-5** (timing): adaptive entry, late loading, arm-on-funded — plus
