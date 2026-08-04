@@ -423,3 +423,77 @@ stop funding it — which stalls a table rather than steering it, and
 `rearmSegment` plus a refilled subscription recovers from that. That is a
 materially better posture than "the operator can pick the outcome and we are
 choosing not to".
+
+---
+
+## What actually happened — 2026-08-04
+
+Deployed and proven the same night. Every contract and every wire in one
+broadcast, `ONCHAIN EXECUTION COMPLETE & SUCCESSFUL`, total cost 0.000154 ETH.
+
+| contract | address |
+|---|---|
+| SegmentBoardVRF | `0x89eE2553AD7c72700A7BfD7A095440cc8BE55227` |
+| PoolLedger | `0x9195803ecA9A0F4F813502A110b32C842330fD0D` |
+| UnderwriteReserve | `0x69C9E840aEc4368016038bF54e603E345ede1063` |
+| VRFEntropy | `0xD982C7218cBD3c395a0A1461732ADEc99A3A87c0` |
+
+**Phase 4 passed on the first arm.** `segmentState(1,1)` returned
+`(armed, locked, drawIn, lockable, replaceable) = (true, false, true, true, false)`
+— the first Chainlink word this board ever consumed, and the point at which the
+opener's selection edge stopped being a thing anyone has to be trusted about.
+`draws(salt)` confirms `ready: true` with `requestedAt = 1785814990`.
+
+The arm→fulfil latency was **not** measured precisely: the fulfilment timestamp
+is not stored on chain, and the manual read happened about ninety seconds later.
+To get it properly, subtract `requestedAt` from the block timestamp of the
+coordinator's callback transaction to `VRFEntropy`. It matters because
+auto-pilot paces the *arms* at the reveal spacing: under that latency the dial
+is the beat and the drumroll is regular; over it, Chainlink sets the pacing and
+the reveals arrive unevenly. 15s is the current setting and a safe default.
+
+### What went wrong, and what it cost
+
+**`env.example` carried Treasury v1.** `TREASURY_ADDRESS=0x486Fa4D8…` — retired,
+no working ERC20 exit, already holding ~6,532 stranded TIMBS. It feeds four
+deploy scripts, and `treasury` is `immutable` in PoolLedger, UnderwriteReserve
+and the board alike. Caught while assembling gen-8's `.env`, so gen-8 reads v4
+correctly.
+
+It was **not** caught in time for gen-7, whose reserve reads
+`treasury() → 0x486Fa4D8…`. The 2,500 TIMBS float drained during phase 1 went
+into the dead contract. The lesson is not "check env.example" — it is that a
+pre-filled address in an example file is indistinguishable from a tuning knob,
+and the ones that are immutable at deploy time should say so where they live.
+`env.example` now does.
+
+**`cast` does not read `.env`.** `forge script` does; `cast` needs the shell to
+have it, and a fresh Codespace does not. Two failed drains before that landed.
+`--interactive` is the better answer anyway — it prompts for the key without it
+touching an env var, the shell history, or the screen.
+
+**Line continuations do not survive a paste into a phone browser terminal.** A
+`\`-split `cast send` ran with no `--rpc-url`, fell back to `localhost:8545`,
+and read as a contract failure. Every command in phases 1-3 is now one line with
+a literal RPC URL for that reason.
+
+### Phase 6 is narrower than it looked
+
+`SegmentBoard.sol` cannot simply be deleted. `SegmentCrank` — still live, still
+in `addresses.js` — can only drive the commit-reveal board: its interface
+declares `lockSegment(uint256,uint8,bytes32)` and `lockSegmentFallback`, neither
+of which exists on gen-8. Its test suite, and `DDJackpot`'s, use the old board
+as their fixture. Deleting the source would leave two live cross-generation
+contracts untested.
+
+Renaming `SegmentBoardVRF.sol` to `SegmentBoard.sol` carries a separate cost the
+plan did not anticipate: the contract *name* is part of the metadata hash, so
+renaming it after deployment means the source no longer verifies against the
+deployed bytecode. Gen-8 is not yet verified on Sourcify. Do that first; and
+past that point the rename buys nothing that a fresh gen-9 deploy would not give
+for free.
+
+So the honest phase 6 is: verify gen-8, correct the crank's
+"generation-agnostic" label (done — it was wrong the moment gen-8 shipped), and
+leave both boards in the tree until the last generation that needs the old one
+is retired.
