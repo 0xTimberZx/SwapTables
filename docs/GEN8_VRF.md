@@ -234,13 +234,95 @@ constructor arg, and phase 4 is where you learn what it should be.
 
 ### Phase 1 — wind gen-7 down
 
-- Retire or cancel every live table.
-- `UnderwriteReserve(0x73b7fBbA…).drainToTreasury()` from the **guardian**. Gen-7
-  is the first generation whose reserve actually holds a float (2,500 TIMBS), so
-  unlike the gen-6 → gen-7 switch this one genuinely strands money if skipped.
-- Players withdraw at leisure; the gen-7 ledger keeps paying forever.
+Every command below is literal. Nothing in angle brackets, nothing to substitute
+except values the chain hands you — because on the gen-7 deploy, three separate
+failures were pasted placeholders and unexported variables, and one was `cast`
+silently falling back to `localhost:8545`. Export the RPC once and confirm it:
+
+```bash
+export ARB_SEPOLIA_RPC=https://sepolia-rollup.arbitrum.io/rpc
+cast chain-id --rpc-url $ARB_SEPOLIA_RPC          # must print 421614
+```
+
+Find what is still live, and close it:
+
+```bash
+cast call 0xf3FF34488D472b89497Cf31631c77bE85524A65a "nextTableId()(uint256)" \
+  --rpc-url $ARB_SEPOLIA_RPC
+```
+
+Walk the ids below that and retire or cancel anything not already retired. A
+table whose six segments are locked closes with `retire(uint256)`; one that never
+filled closes with `cancelTable(uint256)`.
+
+Then drain the float — **this is the step that costs real money if skipped**:
+
+```bash
+# balance before (expect 2500e18)
+cast call 0x2Aaa61E2c08Ff61c93E960EcCd5Dd7fedF0bfaAa \
+  "balanceOf(address)(uint256)" 0x73b7fBbA866859e241e87e39e2aDC81711902D7A \
+  --rpc-url $ARB_SEPOLIA_RPC
+
+# drain — must be signed by the reserve's guardian
+cast send 0x73b7fBbA866859e241e87e39e2aDC81711902D7A "drainToTreasury()" \
+  --rpc-url $ARB_SEPOLIA_RPC --private-key $DEPLOYER_PRIVATE_KEY
+
+# balance after (expect 0)
+cast call 0x2Aaa61E2c08Ff61c93E960EcCd5Dd7fedF0bfaAa \
+  "balanceOf(address)(uint256)" 0x73b7fBbA866859e241e87e39e2aDC81711902D7A \
+  --rpc-url $ARB_SEPOLIA_RPC
+```
+
+Gen-7 is the first generation whose reserve actually holds a float, so unlike the
+gen-6 → gen-7 switch this one genuinely strands money if skipped. Confirm the
+guardian first if there is any doubt — `node scripts/check-roles.js` prints it.
+
+Players withdraw at leisure; the gen-7 ledger keeps paying forever.
 
 ### Phase 2 — deploy
+
+`.env` in full. Everything except the last three lines is already known:
+
+```bash
+# ── network facts, settled in phase 0 ──
+VRF_COORDINATOR=0x5CE8D5A2BC84beb22a398CCA51996F7930313D61
+VRF_KEY_HASH=0x1770bdc7eec7771f7ba4ffd640f34260d7f095b79c92d34a5b2551d6f6cfd2be
+VRF_SUB_ID=50316020964400506132465447965056776521389361135399962393916048632548676126967
+VRF_EXTRA_ARGS=0x92fd13380000000000000000000000000000000000000000000000000000000000000000
+VRF_CONFIRMATIONS=3
+VRF_CALLBACK_GAS=200000
+
+# ── long-lived, never redeployed ──
+SEED_REGISTRY_ADDRESS=0x2460C8ed63414F36838542982A5Ab263C9Fcb914
+TIMBS_ADDRESS=0x2Aaa61E2c08Ff61c93E960EcCd5Dd7fedF0bfaAa
+TIMB_PRIZE_ADDRESS=0x35976f4D2260127848a6274D2eC89ee054412432
+TREASURY_ADDRESS=0xd3F40042aFA8074EA68C9f61dE6aDADD539F0D5c
+
+# ── board dials, carried from gen-7 ──
+ENTRY_MAX_SECONDS=2400
+PLACE_WINDOW_SECONDS=300
+BETS_CLOSE_SECONDS=120
+SIT_QUIET_SECONDS=180
+SOLO_WAIT_SECONDS=900
+
+# ── the three that depend on the rotated wallet — fill these in yourself ──
+DEPLOYER_PRIVATE_KEY=
+GUARDIAN_ADDRESS=
+SEED_FUNDER_ADDRESS=
+```
+
+**Set `SEED_FUNDER_ADDRESS` explicitly** to whichever wallet will hold the TIMBS
+seed budget — normally the deployer. Leaving it blank defaults it to
+`TREASURY_ADDRESS`, and that exact default is what made gen-7's first `openTable`
+revert `ERC20InsufficientAllowance`: the approve had been signed by the deployer
+while the board was pulling from Treasury. The script now prints the resolved
+seed funder and shouts if it is not the deployer, but setting it is better than
+being warned.
+
+**Set `GUARDIAN_ADDRESS`** too. Blank means guardian `address(0)`, which leaves
+nobody able to halt the reserve *or* `drainToTreasury()` it when gen-9 arrives —
+you would be building the exact stranding that phase 1 exists to undo. Fixable
+after the fact with `setGuardian`, but only while ownership is unrenounced.
 
 ```bash
 forge script scripts/DeploySegmentBoardVRF.s.sol \
