@@ -477,6 +477,29 @@ touching an env var, the shell history, or the screen.
 and read as a contract failure. Every command in phases 1-3 is now one line with
 a literal RPC URL for that reason.
 
+### Verification — all four `exact_match`
+
+`SegmentBoardVRF` and `VRFEntropy` verified fresh. `PoolLedger` and
+`UnderwriteReserve` came back **already verified**, which is a real result
+rather than a skipped step: their source has not changed since gen-7, so the
+metadata hash is identical and Sourcify matched the new addresses on its own.
+
+`--guess-constructor-args` handled every case, including `VRFEntropy`'s trailing
+dynamic `bytes` and the board's thirteen arguments. Pre-encoding the args by
+hand turned out to be unnecessary — worth knowing before spending time on it
+next generation.
+
+**The `[etherscan]` table cost three runs before it was removed.** `foundry.toml`
+interpolated `${ARBISCAN_API_KEY}`, and forge resolves that table whenever it
+builds verification config — including for `verify-contract --verifier sourcify`,
+which needs no key at all. With the variable unset, every Sourcify verification
+died on `environment variable ARBISCAN_API_KEY not found`.
+
+It is unusually good at wasting time because **the error names Arbiscan while
+the command says sourcify**, so it reads as a problem with the contract. On
+gen-7 it turned a deploy that had already broadcast successfully into what
+looked like a failed deploy. The table is gone; nothing ever used it.
+
 ### Phase 6 is narrower than it looked
 
 `SegmentBoard.sol` cannot simply be deleted. `SegmentCrank` — still live, still
